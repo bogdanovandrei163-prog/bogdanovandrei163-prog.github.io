@@ -1169,7 +1169,6 @@
     const photoInput = overlay.querySelector('#photoInput');
     overlay.querySelector('#triggerPhotoInput').addEventListener('click', () => photoInput.click());
 
-    // Функция перерисовки превьюшек
     function refreshPhotos() {
       const container = overlay.querySelector('#currentPhotos');
       container.innerHTML = currentUser.photos.map((p, i) => `
@@ -1179,7 +1178,6 @@
           <button class="make-main-photo" data-index="${i}" style="position:absolute; bottom:-5px; left:2px; background:${p.isMain ? '#007aff' : '#8e8e93'}; color:white; border:none; border-radius:8px; font-size:10px; padding:2px 4px;">${p.isMain ? '⭐' : 'Главное'}</button>
         </div>
       `).join('');
-      // Перепривязываем обработчики
       bindPhotoButtons();
     }
 
@@ -1189,7 +1187,6 @@
           const idx = parseInt(e.target.dataset.index);
           if (confirm('Удалить это фото?')) {
             currentUser.photos.splice(idx, 1);
-            // Если удалили главное, делаем первое главным
             if (currentUser.photos.length > 0 && !currentUser.photos.some(p => p.isMain)) {
               currentUser.photos[0].isMain = true;
             }
@@ -1201,7 +1198,6 @@
       overlay.querySelectorAll('.make-main-photo').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index);
-          // Снимаем isMain со всех, ставим на выбранное
           currentUser.photos.forEach((p, i) => p.isMain = (i === idx));
           refreshPhotos();
         });
@@ -1215,7 +1211,6 @@
       for (let file of files) {
         if (file.type.startsWith('image/')) {
           const compressedDataUrl = await compressImage(file);
-          // Если это первое фото, делаем его главным
           const isMain = currentUser.photos.length === 0;
           currentUser.photos.push({ url: compressedDataUrl, isMain });
         } else {
