@@ -42,6 +42,11 @@
       background-position: center;
       margin-right: 12px;
     }
+    /* Сдвиг аватарки в списке чатов */
+    .chat-item .avatar {
+      margin-left: 8px;
+    }
+
     .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
     .badge { background: #ff3b30; color: #fff; border-radius: 20px; padding: 2px 8px; font-size: 12px; margin-left: 6px; }
 
@@ -50,6 +55,7 @@
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     video { width: 100%; max-width: 200px; border-radius: 20px; background: #000; margin: 10px 0; }
 
+    /* Чат */
     .chat-screen { background: #fff; flex: 1; display: flex; flex-direction: column; height: 100%; }
     .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; }
     .message-bubble { max-width: 75%; margin: 4px 0; padding: 10px 14px; border-radius: 18px; position: relative; word-break: break-word; }
@@ -147,8 +153,8 @@
         activateTab('reminders');
       } else {
         const phone = user.email.split('@')[0];
-        await db.collection('users').doc(user.uid).set({ phone, name: phone, age: '', city: '', photo: '', nick: '' });
-        currentUser = { id: user.uid, phone, name: phone, age: '', city: '', photo: '', nick: '' };
+        await db.collection('users').doc(user.uid).set({ phone, name: phone, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false });
+        currentUser = { id: user.uid, phone, name: phone, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false };
         showScreen(screens.main);
         activateTab('reminders');
       }
@@ -176,7 +182,7 @@
     if (password.length < 6) return alert('Пароль должен быть не менее 6 символов');
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), password);
-      await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', photo: '', nick: '' });
+      await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false });
     } catch (error) { alert('Ошибка регистрации: ' + error.message); }
   });
 
@@ -373,7 +379,7 @@
     container.innerHTML = `
       <h2 style="font-size:28px; margin-bottom:16px;">Чаты</h2>
       <div class="search-box" style="margin-bottom:12px;">
-        <input class="ios-input" id="searchUserInput" placeholder="Поиск людей по имени, фамилии, телефону, нику...">
+        <input class="ios-input" id="searchUserInput" placeholder="🔍 Поиск">
         <div id="searchResults" class="search-results" style="display:none;"></div>
       </div>
       <div id="chatsList"></div>
@@ -395,7 +401,7 @@
         usersSnap.forEach(doc => {
           if (doc.id === currentUser.id) return;
           const u = doc.data();
-          const full = (u.name + ' ' + u.phone + ' ' + (u.nick || '')).toLowerCase();
+          const full = (u.name + ' ' + (u.hidePhone ? '' : u.phone) + ' ' + (u.nick || '')).toLowerCase();
           if (full.includes(query.toLowerCase())) {
             results.push({ id: doc.id, ...u });
           }
@@ -408,7 +414,7 @@
               <div class="avatar" style="background-image:url(${u.photo || ''})"></div>
               <div style="flex:1">
                 <strong>${u.name}</strong>
-                <div style="font-size:13px; color:#6e6e73;">${u.phone} ${u.nick ? '@'+u.nick : ''}</div>
+                <div style="font-size:13px; color:#6e6e73;">${u.hidePhone ? '' : u.phone} ${u.nick ? '@'+u.nick : ''}</div>
               </div>
             </div>
           `).join('');
@@ -449,7 +455,7 @@
           const otherUser = usersMap[otherId] || {};
           const lastMsg = c.lastMessage ? c.lastMessage.text : '';
           return `
-            <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer;">
+            <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer; padding-left: 0;">
               <div class="avatar" style="background-image:url(${otherUser.photo || ''})"></div>
               <div style="flex:1">
                 <strong>${otherUser.name || 'Пользователь'}</strong>
@@ -498,7 +504,7 @@
           <div class="avatar" id="chatPartnerAvatar" style="width:36px; height:36px;"></div>
           <div style="flex:1"><strong id="chatPartnerName"></strong></div>
         </div>
-        <div id="messagesContainer" style="flex:1; overflow-y:auto; padding:10px;"></div>
+        <div id="messagesContainer" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column-reverse;"></div>
         <div style="padding:8px; border-top:0.5px solid #e5e5ea; display:flex; gap:6px; align-items:center; background: #f9f9f9;">
           <button class="ios-btn secondary" id="attachMediaBtn" style="width:auto; padding:10px;">📎</button>
           <input class="ios-input" id="messageInput" placeholder="Сообщение..." style="flex:1; margin-bottom:0;">
@@ -534,40 +540,34 @@
     const container = document.getElementById('messagesContainer');
     let initialLoad = true;
     chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
-      .orderBy('time')
+      .orderBy('time', 'asc')  // старые первыми, новые последними
       .onSnapshot(snapshot => {
-        container.innerHTML = '';
-        snapshot.forEach(doc => {
-          const msg = { id: doc.id, ...doc.data() };
-          renderMessage(msg, container);
-        });
-        container.scrollTop = container.scrollHeight;
-
-        if (!initialLoad) {
+        if (initialLoad) {
+          container.innerHTML = '';
+          snapshot.forEach(doc => {
+            const msg = { id: doc.id, ...doc.data() };
+            renderMessage(msg, container);
+          });
+          // После column-reverse скролл вверх, чтобы видеть новые сообщения
+          container.scrollTop = 0;
+          initialLoad = false;
+        } else {
+          // Обрабатываем только добавленные сообщения
           snapshot.docChanges().forEach(change => {
             if (change.type === 'added') {
-              const msg = change.doc.data();
+              const msg = { id: change.doc.id, ...change.doc.data() };
+              const bubble = renderMessage(msg, null);
+              // Вставляем в начало контейнера (так как column-reverse)
+              container.insertBefore(bubble, container.firstChild);
+              // Прокручиваем вверх, чтобы показать новое сообщение
+              container.scrollTop = 0;
               if (msg.sender !== currentUser.id && document.hidden) {
                 showMessageNotification(msg);
               }
             }
           });
-        } else {
-          initialLoad = false;
         }
       });
-  }
-
-  function showMessageNotification(msg) {
-    if (Notification.permission === 'granted') {
-      const title = msg.senderName || 'Новое сообщение';
-      const options = {
-        body: msg.text || '📎 Медиа',
-        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💬</text></svg>',
-        tag: 'chat-msg'
-      };
-      new Notification(title, options);
-    }
   }
 
   function renderMessage(msg, container) {
@@ -614,7 +614,10 @@
     bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
     bubble.addEventListener('touchmove', () => clearTimeout(pressTimer));
 
-    container.appendChild(bubble);
+    if (container) {
+      container.appendChild(bubble);
+    }
+    return bubble;
   }
 
   function getStatusIcon(status) {
@@ -770,22 +773,36 @@
     await batch.commit();
   }
 
-  // ========== ПРОФИЛЬ (с ником) ==========
+  // ========== ПРОФИЛЬ (с датой рождения, переключателями) ==========
   function renderProfile(container) {
     if (!currentUser) return;
     const u = currentUser;
+    const birthdateStr = u.birthdate ? new Date(u.birthdate).toLocaleDateString() : 'не указана';
+    let ageDisplay = '';
+    if (u.birthdate) {
+      const today = new Date();
+      const birth = new Date(u.birthdate);
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      ageDisplay = age + ' лет';
+    } else {
+      ageDisplay = '—';
+    }
+
     container.innerHTML = `
       <div class="profile-header">
         <div class="avatar" id="profileAvatar" style="background-image:url(${u.photo || ''}); width:70px; height:70px;"></div>
         <div>
           <h2>${u.name}</h2>
-          <p style="color:#6e6e73;">${u.phone}</p>
+          <p style="color:#6e6e73;">${u.hidePhone ? 'Телефон скрыт' : u.phone}</p>
         </div>
       </div>
       <div class="card">
-        <p><strong>Возраст:</strong> ${u.age || '—'}</p>
+        <p><strong>Возраст:</strong> ${u.hideBirthdate ? 'скрыт' : ageDisplay}</p>
         <p><strong>Город:</strong> ${u.city || '—'}</p>
-        <p><strong>Телефон:</strong> ${u.phone}</p>
+        <p><strong>Дата рождения:</strong> ${u.hideBirthdate ? 'скрыта' : birthdateStr}</p>
+        <p><strong>Телефон:</strong> ${u.hidePhone ? 'скрыт' : u.phone}</p>
         <p><strong>Никнейм:</strong> ${u.nick || 'не указан'}</p>
       </div>
       <button class="ios-btn" id="editProfileBtn">Редактировать</button>
@@ -807,6 +824,11 @@
         <input class="ios-input" id="editCity" placeholder="Город" value="${currentUser.city || ''}">
         <input class="ios-input" id="editPhone" placeholder="Телефон" value="${currentUser.phone || ''}">
         <input class="ios-input" id="editNick" placeholder="Никнейм (например, @slip)" value="${currentUser.nick || ''}">
+        <input class="ios-input" type="date" id="editBirthdate" placeholder="Дата рождения" value="${currentUser.birthdate || ''}">
+        <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+          <label><input type="checkbox" id="hidePhone" ${currentUser.hidePhone ? 'checked' : ''}> Скрыть номер</label>
+          <label><input type="checkbox" id="hideBirthdate" ${currentUser.hideBirthdate ? 'checked' : ''}> Скрыть дату рождения</label>
+        </div>
         <button class="ios-btn" id="saveProfileBtn">Сохранить</button>
         <button class="ios-btn secondary" id="closeProfileModal">Отмена</button>
       </div>
@@ -819,13 +841,16 @@
       const city = overlay.querySelector('#editCity').value;
       const phone = overlay.querySelector('#editPhone').value;
       const nick = overlay.querySelector('#editNick').value.trim();
+      const birthdate = overlay.querySelector('#editBirthdate').value;
+      const hidePhone = overlay.querySelector('#hidePhone').checked;
+      const hideBirthdate = overlay.querySelector('#hideBirthdate').checked;
 
       const updateProfile = async (photoDataUrl) => {
         await db.collection('users').doc(currentUser.id).update({
-          age, city, phone, nick,
+          age, city, phone, nick, birthdate, hidePhone, hideBirthdate,
           photo: photoDataUrl || currentUser.photo
         });
-        currentUser = { ...currentUser, age, city, phone, nick, photo: photoDataUrl || currentUser.photo };
+        currentUser = { ...currentUser, age, city, phone, nick, birthdate, hidePhone, hideBirthdate, photo: photoDataUrl || currentUser.photo };
         overlay.remove();
         renderTabContent('profile');
       };
