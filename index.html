@@ -52,7 +52,6 @@
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     video { width: 100%; max-width: 200px; border-radius: 20px; background: #000; margin: 10px 0; }
 
-    /* Чат */
     .chat-screen { background: #fff; flex: 1; display: flex; flex-direction: column; height: 100%; }
     .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; cursor: pointer; }
     .message-bubble { max-width: 75%; margin: 4px 0; padding: 10px 14px; border-radius: 18px; position: relative; word-break: break-word; }
@@ -80,7 +79,6 @@
     .online-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #34c759; margin-right: 4px; }
     .offline-indicator { background: #8e8e93; }
 
-    /* Галерея */
     .gallery-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; align-items: center; justify-content: center; }
     .gallery-image { max-width: 90%; max-height: 80%; border-radius: 20px; object-fit: contain; }
     .gallery-controls { position: absolute; bottom: 20px; display: flex; gap: 20px; }
@@ -587,7 +585,7 @@
           <div class="avatar" id="chatPartnerAvatar" style="width:36px; height:36px;"></div>
           <div style="flex:1"><strong id="chatPartnerName"></strong></div>
         </div>
-        <div id="messagesContainer" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column-reverse; gap:0;"></div>
+        <div id="messagesContainer" style="flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:0;"></div>
         <div style="padding:8px; border-top:0.5px solid #e5e5ea; display:flex; gap:6px; align-items:center; background: #f9f9f9;">
           <button class="ios-btn secondary" id="attachMediaBtn" style="width:auto; padding:10px;">📎</button>
           <input class="ios-input" id="messageInput" placeholder="Сообщение..." style="flex:1; margin-bottom:0;">
@@ -748,60 +746,72 @@
 
   function listenMessages(chatId) {
     const container = document.getElementById('messagesContainer');
+    let lastDate = null;
     let initialLoad = true;
+
     chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
       .orderBy('time', 'asc')
       .onSnapshot(snapshot => {
         if (initialLoad) {
           container.innerHTML = '';
-          let lastDate = null;
           snapshot.forEach(doc => {
             const msg = { id: doc.id, ...doc.data() };
-            const msgDate = new Date(msg.time?.toDate());
-            const dateStr = msgDate.toLocaleDateString();
-            if (dateStr !== lastDate) {
-              lastDate = dateStr;
-              const separator = document.createElement('div');
-              separator.className = 'date-separator';
-              separator.textContent = formatDateSeparator(msgDate);
-              container.appendChild(separator);
-            }
-            renderMessage(msg, container);
+            appendMessage(msg, container, true);
           });
-          container.scrollTop = 0;
+          scrollToBottom(container);
           initialLoad = false;
         } else {
           snapshot.docChanges().forEach(change => {
             if (change.type === 'added') {
               const msg = { id: change.doc.id, ...change.doc.data() };
-              const bubble = renderMessage(msg, null);
-              if (bubble) {
-                const msgDate = new Date(msg.time?.toDate());
-                const firstChild = container.firstChild;
-                if (firstChild && firstChild.className === 'date-separator') {
-                  const prevDate = firstChild.textContent;
-                  if (prevDate !== formatDateSeparator(msgDate)) {
-                    const newSep = document.createElement('div');
-                    newSep.className = 'date-separator';
-                    newSep.textContent = formatDateSeparator(msgDate);
-                    container.insertBefore(newSep, container.firstChild);
-                  }
-                } else if (!firstChild || firstChild.className !== 'date-separator') {
-                  const newSep = document.createElement('div');
-                  newSep.className = 'date-separator';
-                  newSep.textContent = formatDateSeparator(msgDate);
-                  container.insertBefore(newSep, container.firstChild);
-                }
-                container.insertBefore(bubble, container.firstChild);
-                container.scrollTop = 0;
-                if (msg.sender !== currentUser.id && document.hidden) {
-                  showMessageNotification(msg);
-                }
+              appendMessage(msg, container, false);
+              scrollToBottom(container);
+              if (msg.sender !== currentUser.id && document.hidden) {
+                showMessageNotification(msg);
               }
             }
           });
         }
       });
+  }
+
+  function appendMessage(msg, container, isInitial) {
+    const msgDate = new Date(msg.time?.toDate());
+    const dateStr = msgDate.toLocaleDateString();
+
+    if (isInitial) {
+      if (dateStr !== lastDate) {
+        lastDate = dateStr;
+        const separator = document.createElement('div');
+        separator.className = 'date-separator';
+        separator.textContent = formatDateSeparator(msgDate);
+        container.appendChild(separator);
+      }
+    } else {
+      // Для новых сообщений проверяем, нужен ли разделитель даты перед этим сообщением
+      const lastChild = container.lastElementChild;
+      if (lastChild && lastChild.className === 'date-separator') {
+        const prevDateText = lastChild.textContent;
+        const newDateText = formatDateSeparator(msgDate);
+        if (prevDateText !== newDateText) {
+          const separator = document.createElement('div');
+          separator.className = 'date-separator';
+          separator.textContent = newDateText;
+          container.appendChild(separator);
+        }
+      } else if (!lastChild || (lastChild.className !== 'date-separator')) {
+        const separator = document.createElement('div');
+        separator.className = 'date-separator';
+        separator.textContent = formatDateSeparator(msgDate);
+        container.appendChild(separator);
+      }
+    }
+
+    renderMessage(msg, container);
+  }
+
+  function scrollToBottom(container) {
+    container.scrollTop = container.scrollHeight;
   }
 
   function formatDateSeparator(date) {
@@ -943,8 +953,8 @@
       input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-          if (file.size > 500 * 1024) {
-            alert('Файл слишком большой. Максимальный размер 500 КБ.');
+          if (file.size > 2000 * 1024) {
+            alert('Файл слишком большой. Максимальный размер 2 МБ.');
             return;
           }
           const reader = new FileReader();
@@ -966,7 +976,7 @@
         mediaRecorder.ondataavailable = e => chunks.push(e.data);
         mediaRecorder.onstop = async () => {
           const blob = new Blob(chunks, { type: 'audio/webm' });
-          if (blob.size > 300 * 1024) {
+          if (blob.size > 2000 * 1024) {
             alert('Голосовое сообщение слишком длинное.');
             return;
           }
@@ -978,7 +988,7 @@
           reader.readAsDataURL(blob);
         };
         mediaRecorder.start();
-        setTimeout(() => mediaRecorder.stop(), 5000);
+        setTimeout(() => mediaRecorder.stop(), 15000);
       } catch (error) { alert('Нет доступа к микрофону'); }
     };
   }
@@ -1133,7 +1143,6 @@
               const idx = parseInt(e.target.dataset.index);
               if (confirm('Удалить это фото?')) {
                 currentUser.photos.splice(idx, 1);
-                // повторно перерисовать
                 const container = overlay.querySelector('#currentPhotos');
                 container.innerHTML = currentUser.photos.map((p, i) => `
                   <div style="display:inline-block; position:relative; margin:4px;">
@@ -1153,8 +1162,8 @@
     photoInput.addEventListener('change', async () => {
       const files = photoInput.files;
       for (let file of files) {
-        if (file.size > 500 * 1024) {
-          alert(`Файл ${file.name} слишком большой. Максимальный размер 500 КБ.`);
+        if (file.size > 2000 * 1024) {
+          alert(`Файл ${file.name} слишком большой. Максимальный размер 2 МБ.`);
           continue;
         }
         const reader = new FileReader();
