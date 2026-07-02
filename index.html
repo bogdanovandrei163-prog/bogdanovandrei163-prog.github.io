@@ -42,7 +42,6 @@
       background-position: center;
       margin-right: 12px;
     }
-    /* Сдвиг аватарки в списке чатов */
     .chat-item .avatar {
       margin-left: 8px;
     }
@@ -55,9 +54,8 @@
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     video { width: 100%; max-width: 200px; border-radius: 20px; background: #000; margin: 10px 0; }
 
-    /* Чат */
     .chat-screen { background: #fff; flex: 1; display: flex; flex-direction: column; height: 100%; }
-    .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; }
+    .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; cursor: pointer; }
     .message-bubble { max-width: 75%; margin: 4px 0; padding: 10px 14px; border-radius: 18px; position: relative; word-break: break-word; }
     .my-message { align-self: flex-end; background: #007aff; color: white; border-bottom-right-radius: 4px; }
     .their-message { align-self: flex-start; background: #e9e9ef; color: black; border-bottom-left-radius: 4px; }
@@ -95,6 +93,30 @@
       display: flex;
       gap: 2px;
       margin-left: 4px;
+    }
+
+    /* Стили для профиля собеседника */
+    .user-profile-card {
+      text-align: center;
+    }
+    .user-profile-card .large-avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 20px;
+      background-size: cover;
+      background-position: center;
+      margin: 0 auto 16px;
+    }
+    .online-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #34c759;
+      margin-right: 4px;
+    }
+    .offline-indicator {
+      background: #8e8e93;
     }
   </style>
 </head>
@@ -155,6 +177,16 @@
   let unsubscribeChats = null;
   let chatUnsubscribe = null;
   let currentChatId = null;
+  let currentPartnerId = null;
+
+  // Обновление lastSeen каждые 5 минут
+  setInterval(() => {
+    if (firebaseUser) {
+      db.collection('users').doc(firebaseUser.uid).update({
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  }, 300000);
 
   const screens = {
     login: $('#loginScreen'),
@@ -174,12 +206,16 @@
       const userDoc = await db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         currentUser = { id: user.uid, ...userDoc.data() };
+        // Обновим lastSeen при входе
+        await db.collection('users').doc(user.uid).update({
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+        });
         showScreen(screens.main);
         activateTab('reminders');
       } else {
         const phone = user.email.split('@')[0];
-        await db.collection('users').doc(user.uid).set({ phone, name: phone, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false });
-        currentUser = { id: user.uid, phone, name: phone, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false };
+        await db.collection('users').doc(user.uid).set({ phone, name: phone, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
+        currentUser = { id: user.uid, phone, name: phone, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, lastSeen: new Date() };
         showScreen(screens.main);
         activateTab('reminders');
       }
@@ -207,7 +243,7 @@
     if (password.length < 6) return alert('Пароль должен быть не менее 6 символов');
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), password);
-      await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false });
+      await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', photo: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
     } catch (error) { alert('Ошибка регистрации: ' + error.message); }
   });
 
@@ -413,7 +449,6 @@
       <div id="chatsList"></div>
     `;
 
-    // Кнопка создания группового чата
     document.getElementById('createGroupChatBtn').addEventListener('click', openCreateGroupChatModal);
 
     const searchInput = $('#searchUserInput');
@@ -502,7 +537,6 @@
       });
   }
 
-  // Создание группового чата
   async function openCreateGroupChatModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -570,7 +604,7 @@
     const container = $('#tabContent');
     container.innerHTML = `
       <div class="chat-screen">
-        <div class="chat-header">
+        <div class="chat-header" id="chatHeader">
           <button class="ios-btn secondary" id="backToChats" style="width:auto; padding:8px 12px;">← Назад</button>
           <div class="avatar" id="chatPartnerAvatar" style="width:36px; height:36px;"></div>
           <div style="flex:1"><strong id="chatPartnerName"></strong></div>
@@ -587,7 +621,14 @@
       closeChatScreen();
       activateTab('chats');
     });
-    loadChatInfo(chatId);
+
+    loadChatInfo(chatId).then(partnerId => {
+      currentPartnerId = partnerId;
+      document.getElementById('chatHeader').addEventListener('click', () => {
+        if (currentPartnerId) openUserProfile(currentPartnerId);
+      });
+    });
+
     listenMessages(chatId);
     markMessagesAsRead(chatId);
   }
@@ -595,6 +636,7 @@
   function closeChatScreen() {
     if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
     currentChatId = null;
+    currentPartnerId = null;
   }
 
   async function loadChatInfo(chatId) {
@@ -605,6 +647,98 @@
     const userData = userDoc.data();
     document.getElementById('chatPartnerName').textContent = userData.name || 'Пользователь';
     document.getElementById('chatPartnerAvatar').style.backgroundImage = `url(${userData.photo || ''})`;
+    return otherId;
+  }
+
+  // Открытие профиля собеседника
+  async function openUserProfile(userId) {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return alert('Пользователь не найден');
+    const u = userDoc.data();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center'; // показываем по центру
+    overlay.style.justifyContent = 'center';
+    
+    const now = new Date();
+    const lastSeen = u.lastSeen ? u.lastSeen.toDate() : null;
+    const online = lastSeen && (now - lastSeen) < 5 * 60 * 1000;
+    const lastSeenStr = lastSeen ? `Был(а) ${formatLastSeen(lastSeen)}` : 'давно';
+
+    const birthdateStr = u.birthdate ? new Date(u.birthdate).toLocaleDateString() : 'не указана';
+    let ageDisplay = '';
+    if (u.birthdate) {
+      const today = new Date();
+      const birth = new Date(u.birthdate);
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      ageDisplay = age + ' лет';
+    } else {
+      ageDisplay = '—';
+    }
+
+    overlay.innerHTML = `
+      <div class="modal-sheet" style="text-align:center; position:relative;">
+        <button class="ios-btn secondary" id="closeUserProfile" style="position:absolute; top:10px; right:10px; width:auto; padding:8px;">✕</button>
+        <div class="large-avatar" id="largeAvatar" style="background-image:url(${u.photo || ''})"></div>
+        <h2>${u.name}</h2>
+        ${u.nick ? `<p style="color:#8e8e93;">@${u.nick}</p>` : ''}
+        <div style="margin:10px 0;">
+          <span class="online-indicator ${online ? '' : 'offline-indicator'}"></span>
+          ${online ? 'В сети' : lastSeenStr}
+        </div>
+        <div class="card">
+          ${!u.hidePhone ? `<p><strong>Телефон:</strong> ${u.phone}</p>` : ''}
+          ${!u.hideBirthdate ? `<p><strong>Дата рождения:</strong> ${birthdateStr} (${ageDisplay})</p>` : ''}
+          <p><strong>Город:</strong> ${u.city || '—'}</p>
+        </div>
+        <button class="ios-btn" id="writeMessageBtn" style="margin-top:10px;">Написать</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Закрытие профиля
+    overlay.querySelector('#closeUserProfile').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    // Увеличение аватара
+    overlay.querySelector('#largeAvatar').addEventListener('click', () => {
+      if (u.photo) {
+        const imgViewer = document.createElement('div');
+        imgViewer.style.position = 'fixed';
+        imgViewer.style.top = '0'; imgViewer.style.left = '0';
+        imgViewer.style.width = '100%'; imgViewer.style.height = '100%';
+        imgViewer.style.backgroundColor = 'rgba(0,0,0,0.9)';
+        imgViewer.style.display = 'flex';
+        imgViewer.style.alignItems = 'center';
+        imgViewer.style.justifyContent = 'center';
+        imgViewer.style.zIndex = '1100';
+        imgViewer.innerHTML = `<img src="${u.photo}" style="max-width:90%; max-height:90%; border-radius:20px;" />`;
+        imgViewer.addEventListener('click', () => imgViewer.remove());
+        document.body.appendChild(imgViewer);
+      }
+    });
+
+    // Кнопка Написать
+    overlay.querySelector('#writeMessageBtn').addEventListener('click', () => {
+      overlay.remove();
+      // Если чат уже открыт с этим пользователем, ничего не делаем, иначе открываем
+      if (currentPartnerId === userId) return;
+      createOrOpenChat(userId);
+    });
+  }
+
+  function formatLastSeen(date) {
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'только что';
+    if (mins < 60) return `${mins} мин. назад`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} ч. назад`;
+    return date.toLocaleDateString();
   }
 
   function listenMessages(chatId) {
@@ -636,11 +770,8 @@
             if (change.type === 'added') {
               const msg = { id: change.doc.id, ...change.doc.data() };
               const bubble = renderMessage(msg, null);
-              // Вставляем в начало контейнера (так как column-reverse)
               if (bubble) {
-                // Проверяем, нужен ли разделитель даты перед этим сообщением
                 const msgDate = new Date(msg.time?.toDate());
-                const dateStr = msgDate.toLocaleDateString();
                 const firstChild = container.firstChild;
                 if (firstChild && firstChild.className === 'date-separator') {
                   const prevDate = firstChild.textContent;
@@ -698,7 +829,6 @@
       content = `<div style="font-size:12px; opacity:0.7; border-left:2px solid #007aff; padding-left:6px; margin-bottom:4px;">↩ ${msg.replyToText}</div>` + content;
     }
 
-    // Статус кружочки
     let statusHTML = '';
     if (isMy) {
       if (msg.status === 'read') {
