@@ -176,6 +176,13 @@
     });
   }
 
+  // Получить URL главного фото
+  function getMainPhoto(photos) {
+    if (!photos || photos.length === 0) return '';
+    const main = photos.find(p => p.isMain);
+    return main ? main.url : photos[0].url;
+  }
+
   // Обновление lastSeen каждые 5 минут
   setInterval(() => {
     if (firebaseUser) {
@@ -490,7 +497,7 @@
         } else {
           searchResults.innerHTML = results.map(u => `
             <div class="search-result-item" data-uid="${u.id}">
-              <div class="avatar" style="background-image:url(${u.photos?.[0] || ''})"></div>
+              <div class="avatar" style="background-image:url(${getMainPhoto(u.photos)})"></div>
               <div style="flex:1">
                 <strong>${u.name}</strong>
                 <div style="font-size:13px; color:#6e6e73;">${u.hidePhone ? '' : u.phone} ${u.nick ? '@'+u.nick : ''}</div>
@@ -532,7 +539,7 @@
         listEl.innerHTML = chats.map(c => {
           const otherId = c.participants.find(id => id !== currentUser.id);
           const otherUser = usersMap[otherId] || {};
-          const mainPhoto = otherUser.photos?.[0] || '';
+          const mainPhoto = getMainPhoto(otherUser.photos);
           const lastMsg = c.lastMessage ? c.lastMessage.text : '';
           return `
             <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer; padding-left: 0;">
@@ -659,7 +666,7 @@
     const userDoc = await db.collection('users').doc(otherId).get();
     const userData = userDoc.data();
     document.getElementById('chatPartnerName').textContent = userData.name || 'Пользователь';
-    document.getElementById('chatPartnerAvatar').style.backgroundImage = `url(${userData.photos?.[0] || ''})`;
+    document.getElementById('chatPartnerAvatar').style.backgroundImage = `url(${getMainPhoto(userData.photos)})`;
     return otherId;
   }
 
@@ -678,7 +685,7 @@
     const online = lastSeen && (now - lastSeen) < 5 * 60 * 1000;
     const lastSeenStr = lastSeen ? `Был(а) ${formatLastSeen(lastSeen)}` : 'давно';
 
-    const mainPhoto = u.photos?.[0] || '';
+    const mainPhoto = getMainPhoto(u.photos);
     const birthdateStr = u.birthdate ? new Date(u.birthdate).toLocaleDateString() : 'не указана';
     let ageDisplay = '';
     if (u.birthdate) {
@@ -717,7 +724,7 @@
 
     overlay.querySelector('#largeAvatar').addEventListener('click', () => {
       if (u.photos?.length > 0) {
-        openGallery(u.photos);
+        openGallery(u.photos.map(p => p.url));
       }
     });
 
@@ -728,7 +735,7 @@
     });
   }
 
-  function openGallery(photos) {
+  function openGallery(photoUrls) {
     const galleryOverlay = document.createElement('div');
     galleryOverlay.className = 'gallery-overlay';
     galleryOverlay.style.display = 'flex';
@@ -736,7 +743,7 @@
 
     const img = document.createElement('img');
     img.className = 'gallery-image';
-    img.src = photos[currentIndex];
+    img.src = photoUrls[currentIndex];
     galleryOverlay.appendChild(img);
 
     const controls = document.createElement('div');
@@ -748,7 +755,7 @@
     galleryOverlay.appendChild(controls);
 
     const updateImage = () => {
-      img.src = photos[currentIndex];
+      img.src = photoUrls[currentIndex];
     };
     controls.querySelector('#prevPhoto').addEventListener('click', () => {
       if (currentIndex > 0) {
@@ -757,7 +764,7 @@
       }
     });
     controls.querySelector('#nextPhoto').addEventListener('click', () => {
-      if (currentIndex < photos.length - 1) {
+      if (currentIndex < photoUrls.length - 1) {
         currentIndex++;
         updateImage();
       }
@@ -963,7 +970,6 @@
     setTimeout(() => menu.remove(), 4000);
   }
 
-  // Отправка сообщений
   document.addEventListener('click', (e) => {
     if (e.target.id === 'sendMsgBtn') sendMessage('text');
     if (e.target.id === 'attachMediaBtn') showMediaOptions();
@@ -1078,7 +1084,7 @@
   function renderProfile(container) {
     if (!currentUser) return;
     const u = currentUser;
-    const mainPhoto = u.photos?.[0] || '';
+    const mainPhoto = getMainPhoto(u.photos);
     const birthdateStr = u.birthdate ? new Date(u.birthdate).toLocaleDateString() : 'не указана';
     let ageDisplay = '';
     if (u.birthdate) {
@@ -1113,7 +1119,7 @@
     const avatarEl = document.getElementById('profileAvatar');
     avatarEl.addEventListener('click', () => {
       if (u.photos?.length > 0) {
-        openGallery(u.photos);
+        openGallery(u.photos.map(p => p.url));
       }
     });
 
@@ -1125,11 +1131,11 @@
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.display = 'flex';
-    const photosHtml = (currentUser.photos || []).map((url, idx) => `
+    const photosHtml = (currentUser.photos || []).map((p, idx) => `
       <div style="display:inline-block; position:relative; margin:4px;">
-        <img src="${url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
+        <img src="${p.url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
         <button class="remove-photo" data-index="${idx}" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border:none; border-radius:50%; width:24px; height:24px;">✕</button>
-        ${idx === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
+        <button class="make-main-photo" data-index="${idx}" style="position:absolute; bottom:-5px; left:2px; background:${p.isMain ? '#007aff' : '#8e8e93'}; color:white; border:none; border-radius:8px; font-size:10px; padding:2px 4px;">${p.isMain ? '⭐' : 'Главное'}</button>
       </div>
     `).join('');
 
@@ -1163,73 +1169,60 @@
     const photoInput = overlay.querySelector('#photoInput');
     overlay.querySelector('#triggerPhotoInput').addEventListener('click', () => photoInput.click());
 
-    overlay.querySelectorAll('.remove-photo').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.index);
-        if (confirm('Удалить это фото?')) {
-          currentUser.photos.splice(idx, 1);
-          const container = overlay.querySelector('#currentPhotos');
-          container.innerHTML = currentUser.photos.map((url, i) => `
-            <div style="display:inline-block; position:relative; margin:4px;">
-              <img src="${url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
-              <button class="remove-photo" data-index="${i}" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border:none; border-radius:50%; width:24px; height:24px;">✕</button>
-              ${i === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
-            </div>
-          `).join('');
-          overlay.querySelectorAll('.remove-photo').forEach(b => {
-            b.addEventListener('click', function(e) {
-              const i = parseInt(e.target.dataset.index);
-              if (confirm('Удалить это фото?')) {
-                currentUser.photos.splice(i, 1);
-                const cont = overlay.querySelector('#currentPhotos');
-                cont.innerHTML = currentUser.photos.map((url, j) => `
-                  <div style="display:inline-block; position:relative; margin:4px;">
-                    <img src="${url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
-                    <button class="remove-photo" data-index="${j}" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border:none; border-radius:50%; width:24px; height:24px;">✕</button>
-                    ${j === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
-                  </div>
-                `).join('');
-              }
-            });
-          });
-        }
+    // Функция перерисовки превьюшек
+    function refreshPhotos() {
+      const container = overlay.querySelector('#currentPhotos');
+      container.innerHTML = currentUser.photos.map((p, i) => `
+        <div style="display:inline-block; position:relative; margin:4px;">
+          <img src="${p.url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
+          <button class="remove-photo" data-index="${i}" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border:none; border-radius:50%; width:24px; height:24px;">✕</button>
+          <button class="make-main-photo" data-index="${i}" style="position:absolute; bottom:-5px; left:2px; background:${p.isMain ? '#007aff' : '#8e8e93'}; color:white; border:none; border-radius:8px; font-size:10px; padding:2px 4px;">${p.isMain ? '⭐' : 'Главное'}</button>
+        </div>
+      `).join('');
+      // Перепривязываем обработчики
+      bindPhotoButtons();
+    }
+
+    function bindPhotoButtons() {
+      overlay.querySelectorAll('.remove-photo').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          if (confirm('Удалить это фото?')) {
+            currentUser.photos.splice(idx, 1);
+            // Если удалили главное, делаем первое главным
+            if (currentUser.photos.length > 0 && !currentUser.photos.some(p => p.isMain)) {
+              currentUser.photos[0].isMain = true;
+            }
+            refreshPhotos();
+          }
+        });
       });
-    });
+
+      overlay.querySelectorAll('.make-main-photo').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          // Снимаем isMain со всех, ставим на выбранное
+          currentUser.photos.forEach((p, i) => p.isMain = (i === idx));
+          refreshPhotos();
+        });
+      });
+    }
+
+    bindPhotoButtons();
 
     photoInput.addEventListener('change', async () => {
       const files = photoInput.files;
       for (let file of files) {
         if (file.type.startsWith('image/')) {
           const compressedDataUrl = await compressImage(file);
-          currentUser.photos.push(compressedDataUrl);
+          // Если это первое фото, делаем его главным
+          const isMain = currentUser.photos.length === 0;
+          currentUser.photos.push({ url: compressedDataUrl, isMain });
         } else {
           alert('Файл ' + file.name + ' не является изображением.');
         }
       }
-      const container = overlay.querySelector('#currentPhotos');
-      container.innerHTML = currentUser.photos.map((url, idx) => `
-        <div style="display:inline-block; position:relative; margin:4px;">
-          <img src="${url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
-          <button class="remove-photo" data-index="${idx}" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border:none; border-radius:50%; width:24px; height:24px;">✕</button>
-          ${idx === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
-        </div>
-      `).join('');
-      overlay.querySelectorAll('.remove-photo').forEach(b => {
-        b.addEventListener('click', function(e) {
-          const i = parseInt(e.target.dataset.index);
-          if (confirm('Удалить это фото?')) {
-            currentUser.photos.splice(i, 1);
-            const cont = overlay.querySelector('#currentPhotos');
-            cont.innerHTML = currentUser.photos.map((url, j) => `
-              <div style="display:inline-block; position:relative; margin:4px;">
-                <img src="${url}" style="width:70px; height:70px; border-radius:12px; object-fit:cover;" />
-                <button class="remove-photo" data-index="${j}" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border:none; border-radius:50%; width:24px; height:24px;">✕</button>
-                ${j === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
-              </div>
-            `).join('');
-          }
-        });
-      });
+      refreshPhotos();
     });
 
     overlay.querySelector('#saveProfileBtn').addEventListener('click', async () => {
