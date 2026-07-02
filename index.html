@@ -32,15 +32,24 @@
     .card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     .reminder-item, .chat-item, .task-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 0.5px solid #e5e5ea; }
     .reminder-item:last-child, .chat-item:last-child, .task-item:last-child { border-bottom: none; }
-    .avatar { width: 48px; height: 48px; border-radius: 50%; background: #c7c7cc; background-size: cover; background-position: center; margin-right: 12px; }
+
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #c7c7cc;
+      background-size: cover;
+      background-position: center;
+      margin-right: 12px;
+    }
     .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
     .badge { background: #ff3b30; color: #fff; border-radius: 20px; padding: 2px 8px; font-size: 12px; margin-left: 6px; }
+
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; align-items: flex-end; justify-content: center; z-index: 1000; }
     .modal-sheet { background: #f2f2f7; width: 100%; max-width: 430px; border-radius: 24px 24px 0 0; padding: 20px 16px 30px; animation: slideUp 0.25s ease; }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     video { width: 100%; max-width: 200px; border-radius: 20px; background: #000; margin: 10px 0; }
 
-    /* Чат */
     .chat-screen { background: #fff; flex: 1; display: flex; flex-direction: column; height: 100%; }
     .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; }
     .message-bubble { max-width: 75%; margin: 4px 0; padding: 10px 14px; border-radius: 18px; position: relative; word-break: break-word; }
@@ -60,7 +69,6 @@
 </head>
 <body>
 <div class="app-container" id="appContainer">
-  <!-- Экраны входа / регистрации -->
   <div class="screen active" id="loginScreen">
     <h2 style="font-size:28px; font-weight:700; margin:40px 0 8px;">Вход</h2>
     <input class="ios-input" type="tel" id="loginPhone" placeholder="+71234567890">
@@ -81,7 +89,6 @@
     <button class="ios-btn" id="registerBtn">Зарегистрироваться</button>
   </div>
 
-  <!-- Главный экран с табами -->
   <div class="screen" id="mainScreen" style="padding-bottom:0;">
     <div id="tabContent" style="flex:1; overflow-y:auto; padding-bottom:12px;"></div>
     <div class="tab-bar" id="tabBar">
@@ -94,7 +101,6 @@
 </div>
 
 <script>
-  // Firebase конфиг
   const firebaseConfig = {
     apiKey: "AIzaSyBRR33qbJhlWVjSykp2YLrk1dz8EWXiyI8",
     authDomain: "slip-54122.firebaseapp.com",
@@ -119,7 +125,6 @@
   let chatUnsubscribe = null;
   let currentChatId = null;
 
-  // Экраны
   const screens = {
     login: $('#loginScreen'),
     register: $('#registerScreen'),
@@ -142,8 +147,8 @@
         activateTab('reminders');
       } else {
         const phone = user.email.split('@')[0];
-        await db.collection('users').doc(user.uid).set({ phone, name: phone, age: '', city: '', photo: '' });
-        currentUser = { id: user.uid, phone, name: phone, age: '', city: '', photo: '' };
+        await db.collection('users').doc(user.uid).set({ phone, name: phone, age: '', city: '', photo: '', nick: '' });
+        currentUser = { id: user.uid, phone, name: phone, age: '', city: '', photo: '', nick: '' };
         showScreen(screens.main);
         activateTab('reminders');
       }
@@ -171,11 +176,10 @@
     if (password.length < 6) return alert('Пароль должен быть не менее 6 символов');
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), password);
-      await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', photo: '' });
+      await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', photo: '', nick: '' });
     } catch (error) { alert('Ошибка регистрации: ' + error.message); }
   });
 
-  // Табы
   const tabButtons = $$('.tab-btn');
   tabButtons.forEach(btn => btn.addEventListener('click', (e) => {
     const tab = e.currentTarget.dataset.tab;
@@ -539,7 +543,6 @@
         });
         container.scrollTop = container.scrollHeight;
 
-        // Показывать уведомления только для новых добавленных сообщений после первой загрузки
         if (!initialLoad) {
           snapshot.docChanges().forEach(change => {
             if (change.type === 'added') {
@@ -661,7 +664,6 @@
     setTimeout(() => menu.remove(), 4000);
   }
 
-  // Отправка сообщения
   document.addEventListener('click', (e) => {
     if (e.target.id === 'sendMsgBtn') sendMessage('text');
     if (e.target.id === 'attachMediaBtn') showMediaOptions();
@@ -768,7 +770,7 @@
     await batch.commit();
   }
 
-  // ========== ПРОФИЛЬ ==========
+  // ========== ПРОФИЛЬ (с ником) ==========
   function renderProfile(container) {
     if (!currentUser) return;
     const u = currentUser;
@@ -784,6 +786,7 @@
         <p><strong>Возраст:</strong> ${u.age || '—'}</p>
         <p><strong>Город:</strong> ${u.city || '—'}</p>
         <p><strong>Телефон:</strong> ${u.phone}</p>
+        <p><strong>Никнейм:</strong> ${u.nick || 'не указан'}</p>
       </div>
       <button class="ios-btn" id="editProfileBtn">Редактировать</button>
       <button class="ios-btn secondary" id="logoutBtn" style="margin-top:8px;">Выйти</button>
@@ -803,6 +806,7 @@
         <input class="ios-input" id="editAge" placeholder="Возраст" value="${currentUser.age || ''}">
         <input class="ios-input" id="editCity" placeholder="Город" value="${currentUser.city || ''}">
         <input class="ios-input" id="editPhone" placeholder="Телефон" value="${currentUser.phone || ''}">
+        <input class="ios-input" id="editNick" placeholder="Никнейм (например, @slip)" value="${currentUser.nick || ''}">
         <button class="ios-btn" id="saveProfileBtn">Сохранить</button>
         <button class="ios-btn secondary" id="closeProfileModal">Отмена</button>
       </div>
@@ -814,13 +818,14 @@
       const age = overlay.querySelector('#editAge').value;
       const city = overlay.querySelector('#editCity').value;
       const phone = overlay.querySelector('#editPhone').value;
+      const nick = overlay.querySelector('#editNick').value.trim();
 
       const updateProfile = async (photoDataUrl) => {
         await db.collection('users').doc(currentUser.id).update({
-          age, city, phone,
+          age, city, phone, nick,
           photo: photoDataUrl || currentUser.photo
         });
-        currentUser = { ...currentUser, age, city, phone, photo: photoDataUrl || currentUser.photo };
+        currentUser = { ...currentUser, age, city, phone, nick, photo: photoDataUrl || currentUser.photo };
         overlay.remove();
         renderTabContent('profile');
       };
