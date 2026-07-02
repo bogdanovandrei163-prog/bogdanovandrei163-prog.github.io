@@ -788,7 +788,6 @@
         container.appendChild(separator);
       }
     } else {
-      // Для новых сообщений проверяем, нужен ли разделитель даты перед этим сообщением
       const lastChild = container.lastElementChild;
       if (lastChild && lastChild.className === 'date-separator') {
         const prevDateText = lastChild.textContent;
@@ -953,8 +952,8 @@
       input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-          if (file.size > 2000 * 1024) {
-            alert('Файл слишком большой. Максимальный размер 2 МБ.');
+          if (file.size > 1024 * 1024) {
+            alert('Файл слишком большой. Максимальный размер 1 МБ.');
             return;
           }
           const reader = new FileReader();
@@ -976,7 +975,7 @@
         mediaRecorder.ondataavailable = e => chunks.push(e.data);
         mediaRecorder.onstop = async () => {
           const blob = new Blob(chunks, { type: 'audio/webm' });
-          if (blob.size > 2000 * 1024) {
+          if (blob.size > 1024 * 1024) {
             alert('Голосовое сообщение слишком длинное.');
             return;
           }
@@ -1122,13 +1121,11 @@
     const photoInput = overlay.querySelector('#photoInput');
     overlay.querySelector('#triggerPhotoInput').addEventListener('click', () => photoInput.click());
 
-    // Обработка удаления фото
     overlay.querySelectorAll('.remove-photo').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const idx = parseInt(e.target.dataset.index);
         if (confirm('Удалить это фото?')) {
           currentUser.photos.splice(idx, 1);
-          // Перерисовать превью
           const container = overlay.querySelector('#currentPhotos');
           container.innerHTML = currentUser.photos.map((p, i) => `
             <div style="display:inline-block; position:relative; margin:4px;">
@@ -1137,7 +1134,6 @@
               ${i === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
             </div>
           `).join('');
-          // Обновить обработчики удаления на новые кнопки
           overlay.querySelectorAll('.remove-photo').forEach(btn => {
             btn.addEventListener('click', (e) => {
               const idx = parseInt(e.target.dataset.index);
@@ -1158,12 +1154,11 @@
       });
     });
 
-    // Обработка добавления новых фото
     photoInput.addEventListener('change', async () => {
       const files = photoInput.files;
       for (let file of files) {
-        if (file.size > 2000 * 1024) {
-          alert(`Файл ${file.name} слишком большой. Максимальный размер 2 МБ.`);
+        if (file.size > 1024 * 1024) {
+          alert(`Файл ${file.name} слишком большой. Максимальный размер 1 МБ.`);
           continue;
         }
         const reader = new FileReader();
@@ -1176,7 +1171,6 @@
           reader.readAsDataURL(file);
         });
       }
-      // Обновить превью
       const container = overlay.querySelector('#currentPhotos');
       container.innerHTML = currentUser.photos.map((p, i) => `
         <div style="display:inline-block; position:relative; margin:4px;">
@@ -1185,7 +1179,6 @@
           ${i === 0 ? '<div style="position:absolute; bottom:2px; left:2px; background:#007aff; color:white; font-size:10px; padding:2px 4px; border-radius:8px;">Главное</div>' : ''}
         </div>
       `).join('');
-      // перепривязать обработчики
       overlay.querySelectorAll('.remove-photo').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index);
