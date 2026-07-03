@@ -69,6 +69,8 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      border-radius: 16px;
+      margin: 8px 8px 0;
     }
     .burger-btn {
       background: none;
@@ -139,7 +141,7 @@
       <button class="burger-btn" id="closeSidebarBtn" style="font-size:24px;">✕</button>
     </div>
     <div class="sidebar-item" data-tab="interesting"><span>✨</span> Интересное</div>
-    <div class="sidebar-item" data-tab="chats"><span>💬</span> Чаты</div>
+    <div class="sidebar-item" data-tab="chats"><span>💬</span> Чаты <span class="badge" id="unreadBadge" style="margin-left: auto; display: none;">0</span></div>
     <div class="sidebar-item" data-tab="reminders"><span>⏰</span> Напоминания</div>
     <div class="sidebar-item" data-tab="tasks"><span>✅</span> Задачи</div>
     <div class="sidebar-item" data-tab="settings"><span>👤</span> Настройки</div>
@@ -217,10 +219,38 @@
       const tab = item.dataset.tab;
       activateTab(tab);
       closeSidebar();
-      document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
     });
   });
+
+  // ---- Бейдж непрочитанных ----
+  let unreadCount = 0;
+  const unreadBadge = document.getElementById('unreadBadge');
+  function updateUnreadBadge() {
+    if (!unreadBadge) return;
+    if (unreadCount > 0) {
+      unreadBadge.textContent = unreadCount;
+      unreadBadge.style.display = 'inline';
+    } else {
+      unreadBadge.style.display = 'none';
+    }
+  }
+
+  async function initialUnreadCount() {
+    if (!currentUser) return;
+    const chatsSnap = await db.collection('chats')
+      .where('participants', 'array-contains', currentUser.id)
+      .get();
+    let count = 0;
+    for (const doc of chatsSnap.docs) {
+      const msgsSnap = await doc.ref.collection('messages')
+        .where('sender', '!=', currentUser.id)
+        .where('status', '==', 'sent')
+        .get();
+      count += msgsSnap.size;
+    }
+    unreadCount = count;
+    updateUnreadBadge();
+  }
 
   // ---- Сжатие изображений ----
   function compressImage(file) {
@@ -270,6 +300,7 @@
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
         showScreen(screens.main);
         activateTab('reminders');
+        initialUnreadCount();
       } else {
         const phone = user.email.split('@')[0];
         const newUser = { phone, name: phone, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() };
@@ -814,8 +845,12 @@
               const msg = { id: change.doc.id, ...change.doc.data() };
               appendMessage(msg, container, false);
               container.scrollTop = container.scrollHeight;
-              if (msg.sender !== currentUser.id && document.hidden) {
-                showMessageNotification(msg);
+              if (msg.sender !== currentUser.id) {
+                if (document.hidden || currentChatId !== chatId) {
+                  unreadCount++;
+                  updateUnreadBadge();
+                }
+                if (document.hidden) showMessageNotification(msg);
               }
             }
           });
@@ -1008,10 +1043,13 @@
 
   async function markMessagesAsRead(chatId) {
     const msgs = await db.collection('chats').doc(chatId).collection('messages')
-      .where('sender', '!=', currentUser.id).where('status', '==', 'delivered').get();
+      .where('sender', '!=', currentUser.id).where('status', '==', 'sent').get();
     const batch = db.batch();
-    msgs.forEach(doc => batch.update(doc.ref, { status: 'read' }));
+    msgs.forEach(doc => batch.update(doc.ref, { status: 'delivered' }));
     await batch.commit();
+    unreadCount -= msgs.size;
+    if (unreadCount < 0) unreadCount = 0;
+    updateUnreadBadge();
   }
 
   // ========== ПРОФИЛЬ (теперь Настройки) ==========
