@@ -62,7 +62,9 @@
 
     .section-header {
       padding: 16px;
-      background: #f2f2f7;
+      background: #ffffff;
+      border-bottom: 0.5px solid rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       flex-shrink: 0;
       display: flex;
       align-items: center;
@@ -136,10 +138,11 @@
       <h2 style="font-size:24px;">Slip</h2>
       <button class="burger-btn" id="closeSidebarBtn" style="font-size:24px;">✕</button>
     </div>
+    <div class="sidebar-item" data-tab="interesting"><span>✨</span> Интересное</div>
+    <div class="sidebar-item" data-tab="chats"><span>💬</span> Чаты</div>
     <div class="sidebar-item" data-tab="reminders"><span>⏰</span> Напоминания</div>
     <div class="sidebar-item" data-tab="tasks"><span>✅</span> Задачи</div>
-    <div class="sidebar-item" data-tab="chats"><span>💬</span> Чаты</div>
-    <div class="sidebar-item" data-tab="profile"><span>👤</span> Профиль</div>
+    <div class="sidebar-item" data-tab="settings"><span>👤</span> Настройки</div>
   </div>
 
   <!-- Экраны входа/регистрации -->
@@ -304,7 +307,6 @@
 
   function activateTab(tab) {
     if (currentChatId) closeChatScreen();
-    // Обновляем активный пункт в сайдбаре
     document.querySelectorAll('.sidebar-item').forEach(i => {
       i.classList.remove('active');
       if (i.dataset.tab === tab) i.classList.add('active');
@@ -322,51 +324,44 @@
     container.innerHTML = '';
     container.classList.remove('chat-open');
 
+    const titles = {
+      interesting: 'Интересное',
+      reminders: 'Напоминания',
+      tasks: 'Задачи',
+      chats: 'Чаты',
+      settings: 'Настройки'
+    };
+    const title = titles[tab] || 'Раздел';
+
+    container.innerHTML = `
+      <div class="section-header">
+        <button class="burger-btn open-sidebar-btn">☰</button>
+        <h2>${title}</h2>
+      </div>
+      <div class="section-body" id="sectionBody"></div>
+    `;
+    container.querySelector('.open-sidebar-btn').addEventListener('click', openSidebar);
+
+    const body = document.getElementById('sectionBody');
+
     switch(tab) {
+      case 'interesting':
+        body.innerHTML = '<p style="padding:20px; text-align:center; color:#8e8e93;">Здесь будет интересный контент</p>';
+        break;
       case 'reminders':
-        container.innerHTML = `
-          <div class="section-header">
-            <button class="burger-btn" id="openSidebarBtn">☰</button>
-            <h2>Напоминания</h2>
-          </div>
-          <div class="section-body" id="remindersBody"></div>
-        `;
-        document.getElementById('openSidebarBtn').addEventListener('click', openSidebar);
-        renderReminders(document.getElementById('remindersBody'));
+        renderReminders(body);
         break;
       case 'tasks':
-        container.innerHTML = `
-          <div class="section-header">
-            <button class="burger-btn" id="openSidebarBtn">☰</button>
-            <h2>Общие задачи</h2>
-          </div>
-          <div class="section-body" id="tasksBody"></div>
-        `;
-        document.getElementById('openSidebarBtn').addEventListener('click', openSidebar);
-        renderTasks(document.getElementById('tasksBody'));
+        renderTasks(body);
         break;
       case 'chats':
-        container.innerHTML = `
-          <div class="section-header">
-            <button class="burger-btn" id="openSidebarBtn">☰</button>
-            <h2>Чаты</h2>
-          </div>
-          <div class="section-body" id="chatsBody"></div>
-        `;
-        document.getElementById('openSidebarBtn').addEventListener('click', openSidebar);
-        renderChats(document.getElementById('chatsBody'));
+        renderChats(body);
         break;
-      case 'profile':
-        container.innerHTML = `
-          <div class="section-header">
-            <button class="burger-btn" id="openSidebarBtn">☰</button>
-            <h2>Профиль</h2>
-          </div>
-          <div class="section-body" id="profileBody"></div>
-        `;
-        document.getElementById('openSidebarBtn').addEventListener('click', openSidebar);
-        renderProfile(document.getElementById('profileBody'));
+      case 'settings':
+        renderProfile(body);
         break;
+      default:
+        body.innerHTML = '<p style="padding:20px; text-align:center; color:#8e8e93;">Раздел не найден</p>';
     }
   }
 
@@ -1019,7 +1014,7 @@
     await batch.commit();
   }
 
-  // ========== ПРОФИЛЬ ==========
+  // ========== ПРОФИЛЬ (теперь Настройки) ==========
   function renderProfile(body) {
     if (!currentUser) return;
     const u = currentUser;
@@ -1157,7 +1152,7 @@
       await db.collection('users').doc(currentUser.id).update({ age, city, phone, nick, birthdate, hidePhone, hideBirthdate, photos: currentUser.photos });
       currentUser = { ...currentUser, age, city, phone, nick, birthdate, hidePhone, hideBirthdate, photos: currentUser.photos };
       overlay.remove();
-      renderTabContent('profile');
+      renderTabContent('settings');
     });
   }
 
