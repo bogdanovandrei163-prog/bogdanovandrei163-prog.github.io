@@ -129,8 +129,6 @@
     .gallery-image { max-width: 90%; max-height: 80%; border-radius: 20px; object-fit: contain; }
     .gallery-controls { position: absolute; bottom: 20px; display: flex; gap: 20px; }
     .gallery-controls button { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; }
-
-    /* Поле ввода как в Telegram */
     .chat-textarea {
       flex: 1;
       padding: 10px 14px;
@@ -277,7 +275,7 @@
         currentUser = { id: user.uid, ...userDoc.data(), photos: userDoc.data().photos || [] };
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
         showScreen(screens.main);
-        activateTab('interesting'); // Теперь открываем раздел "Интересное" по умолчанию
+        activateTab('interesting');
         initialUnreadCount();
       } else {
         const phone = user.email.split('@')[0];
@@ -285,7 +283,7 @@
         await db.collection('users').doc(user.uid).set(newUser);
         currentUser = { id: user.uid, ...newUser, lastSeen: new Date() };
         showScreen(screens.main);
-        activateTab('interesting'); // Теперь открываем раздел "Интересное" по умолчанию
+        activateTab('interesting');
       }
     } else {
       firebaseUser = null; currentUser = null;
@@ -839,14 +837,21 @@
             const msg = { id: doc.id, ...doc.data() };
             appendMessage(msg, container, true);
           });
-          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+          requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+          });
+          setTimeout(() => {
+            container.scrollTop = container.scrollHeight;
+          }, 150);
           initialLoad = false;
         } else {
           snapshot.docChanges().forEach(change => {
             if (change.type === 'added') {
               const msg = { id: change.doc.id, ...change.doc.data() };
               appendMessage(msg, container, false);
-              container.scrollTop = container.scrollHeight;
+              requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+              });
               if (msg.sender !== currentUser.id && document.hidden) {
                 showMessageNotification(msg);
               }
@@ -1045,6 +1050,16 @@
     textarea.focus();
     textarea.dataset.replyTo = '';
     textarea.placeholder = 'Сообщение...';
+
+    const container = document.getElementById('messagesContainer');
+    if (container) {
+      setTimeout(() => {
+        container.scrollTop = container.scrollHeight;
+      }, 100);
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    }
   }
 
   async function markMessagesAsRead(chatId) {
