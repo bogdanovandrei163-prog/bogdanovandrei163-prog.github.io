@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Slip</title>
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Slip">
   <link rel="apple-touch-icon" href="icon.png">
@@ -33,10 +33,7 @@
     .reminder-item, .chat-item, .task-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 0.5px solid #e5e5ea; }
     .reminder-item:last-child, .chat-item:last-child, .task-item:last-child { border-bottom: none; }
 
-    .avatar {
-      width: 48px; height: 48px; border-radius: 12px; background: #c7c7cc;
-      background-size: cover; background-position: center; margin-right: 12px;
-    }
+    .avatar { width: 48px; height: 48px; border-radius: 12px; background: #c7c7cc; background-size: cover; background-position: center; margin-right: 12px; }
     .chat-item .avatar { margin-left: 8px; }
 
     .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
@@ -142,7 +139,7 @@
   let currentChatId = null;
   let currentPartnerId = null;
 
-  // Сжатие изображения
+  // Сжатие изображения (макс. 1200px, качество 0.7)
   function compressImage(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -244,7 +241,7 @@
     if (unsubscribeTasks) { unsubscribeTasks(); unsubscribeTasks = null; }
     if (unsubscribeChats) { unsubscribeChats(); unsubscribeChats = null; }
     if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
-    container.innerHTML = ''; // очищаем перед рендером
+    container.innerHTML = '';
     switch(tab) {
       case 'reminders': renderReminders(container); break;
       case 'tasks': renderTasks(container); break;
