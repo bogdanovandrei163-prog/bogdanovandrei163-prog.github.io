@@ -1,14 +1,19 @@
-const CACHE_NAME = 'slip-v2'; // Увеличивайте версию при каждом важном обновлении
+const CACHE_NAME = 'slip-v3'; // Увеличьте версию, чтобы сбросить старый кэш
+
+// Файлы, которые хотим закэшировать при установке
+const PRECACHE_ASSETS = [
+  './',
+  './manifest.json',
+  './icon.png' // если используете
+];
 
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Сразу активировать новый Service Worker
+  self.skipWaiting(); // сразу активировать новый SW
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll([
-        './',
-        './manifest.json'
-        // Не кэшируем index.html, чтобы он всегда загружался с сервера
-      ]);
+      return cache.addAll(PRECACHE_ASSETS).catch(err => {
+        console.warn('Не удалось закэшировать некоторые ресурсы:', err);
+      });
     })
   );
 });
@@ -24,22 +29,43 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Для навигации (HTML) всегда обращаемся к сети
+  // Пропускаем POST-запросы и другие не-GET
+  if (event.request.method !== 'GET') return;
+
+  // Для навигации (HTML) всегда пытаемся получить свежую версию из сети
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request));
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('./'))
+    );
     return;
   }
-  // Для остальных ресурсов – кэш, но с обновлением
+
+  // Для остальных GET-запросов: сначала кэш, иначе сеть, и сохраняем в кэш
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetched = fetch(event.request).then(response => {
+    caches.match(event.request).then(cachedResponse => {
+      if (cachedResponse) {
+        // Обновляем кэш в фоне
+        fetch(event.request).then(response => {
+          if (response.ok) {
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, response.clone());
+            });
+          }
+        }).catch(() => {});
+        return cachedResponse;
+      }
+      // Если нет в кэше – запрашиваем сеть и кэшируем
+      return fetch(event.request).then(response => {
+        if (!response || response.status !== 200) return response;
         const responseClone = response.clone();
         caches.open(CACHE_NAME).then(cache => {
           cache.put(event.request, responseClone);
         });
         return response;
+      }).catch(() => {
+        // Для изображений можно вернуть заглушку, если нужно
+        return new Response('', { status: 408 });
       });
-      return cached || fetched;
     })
   );
 });
