@@ -78,6 +78,9 @@
     .gallery-image { max-width: 90%; max-height: 80%; border-radius: 20px; object-fit: contain; }
     .gallery-controls { position: absolute; bottom: 20px; display: flex; gap: 20px; }
     .gallery-controls button { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; }
+
+    /* Когда чат открыт, убираем прокрутку у родителя */
+    #tabContent.chat-open { overflow: hidden; }
   </style>
 </head>
 <body>
@@ -138,6 +141,9 @@
   let chatUnsubscribe = null;
   let currentChatId = null;
   let currentPartnerId = null;
+
+  // Глобальная переменная для отслеживания дат в чате
+  let lastDate = null;
 
   // Сжатие изображения (макс. 1200px, качество 0.7)
   function compressImage(file) {
@@ -242,6 +248,7 @@
     if (unsubscribeChats) { unsubscribeChats(); unsubscribeChats = null; }
     if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
     container.innerHTML = '';
+    container.classList.remove('chat-open'); // сбрасываем класс чата
     switch(tab) {
       case 'reminders': renderReminders(container); break;
       case 'tasks': renderTasks(container); break;
@@ -538,6 +545,7 @@
     if (currentChatId) closeChatScreen();
     currentChatId = chatId;
     const container = $('#tabContent');
+    container.classList.add('chat-open'); // фиксируем высоту
     container.innerHTML = `
       <div class="chat-screen" id="chatScreen">
         <div class="chat-header" id="chatHeader">
@@ -572,6 +580,9 @@
   function closeChatScreen() {
     if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
     currentChatId = null; currentPartnerId = null;
+    const container = $('#tabContent');
+    container.classList.remove('chat-open');
+    container.innerHTML = '';
   }
 
   async function loadChatInfo(chatId) {
@@ -671,17 +682,31 @@
     return date.toLocaleDateString();
   }
 
+  function showMessageNotification(msg) {
+    if (Notification.permission === 'granted') {
+      new Notification(msg.senderName || 'Новое сообщение', {
+        body: msg.text || '📎 Медиа',
+        icon: 'icon.png'
+      });
+    }
+  }
+
   function listenMessages(chatId) {
     const container = document.getElementById('messagesContainer');
-    let lastDate = null;
+    if (!container) return;
     let initialLoad = true;
+    lastDate = null; // Сбрасываем даты при новом слушателе
     chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
       .orderBy('time', 'asc')
       .onSnapshot(snapshot => {
         if (initialLoad) {
           container.innerHTML = '';
-          snapshot.forEach(doc => appendMessage({ id: doc.id, ...doc.data() }, container, true));
-          container.scrollTop = container.scrollHeight;
+          snapshot.forEach(doc => {
+            const msg = { id: doc.id, ...doc.data() };
+            appendMessage(msg, container, true);
+          });
+          // Прокрутка вниз после загрузки
+          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
           initialLoad = false;
         } else {
           snapshot.docChanges().forEach(change => {
@@ -689,7 +714,9 @@
               const msg = { id: change.doc.id, ...change.doc.data() };
               appendMessage(msg, container, false);
               container.scrollTop = container.scrollHeight;
-              if (msg.sender !== currentUser.id && document.hidden) showMessageNotification(msg);
+              if (msg.sender !== currentUser.id && document.hidden) {
+                showMessageNotification(msg);
+              }
             }
           });
         }
@@ -699,6 +726,7 @@
   function appendMessage(msg, container, isInitial) {
     const msgDate = new Date(msg.time?.toDate());
     const dateStr = msgDate.toLocaleDateString();
+
     if (isInitial) {
       if (dateStr !== lastDate) {
         lastDate = dateStr;
@@ -707,9 +735,11 @@
       }
     } else {
       const last = container.lastElementChild;
-      if (last && last.className === 'date-separator' && last.textContent !== formatDateSeparator(msgDate)) {
-        const sep = document.createElement('div'); sep.className = 'date-separator'; sep.textContent = formatDateSeparator(msgDate);
-        container.appendChild(sep);
+      if (last && last.className === 'date-separator') {
+        if (last.textContent !== formatDateSeparator(msgDate)) {
+          const sep = document.createElement('div'); sep.className = 'date-separator'; sep.textContent = formatDateSeparator(msgDate);
+          container.appendChild(sep);
+        }
       } else if (!last || last.className !== 'date-separator') {
         const sep = document.createElement('div'); sep.className = 'date-separator'; sep.textContent = formatDateSeparator(msgDate);
         container.appendChild(sep);
