@@ -64,7 +64,6 @@
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     video { width: 100%; max-width: 200px; border-radius: 20px; background: #000; margin: 10px 0; }
 
-    /* ЧАТ – жёсткая фиксация */
     #tabContent { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
     .chat-screen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; background: #fff; }
     .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; flex-shrink: 0; margin-top: 24px; }
@@ -94,17 +93,68 @@
       border-radius: 20px; font-size: 16px; outline: none; resize: none;
       min-height: 40px; max-height: 120px; overflow-y: auto; line-height: 1.4;
     }
-    /* время в превью чата */
-    .card.chat-item {
-      position: relative; /* чтобы абсолютно спозиционировать время */
+
+    /* Новые стили для превью чата */
+    .chat-item .chat-info {
+      flex: 1;
+      padding-right: 8px;
+    }
+    .chat-item .name-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+    .chat-item .name-row strong {
+      font-size: 17px;
+      line-height: 1.2;
+    }
+    .online-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .online-dot.online { background: #34c759; }
+    .online-dot.offline { background: #ff3b30; }
+    .chat-item .last-msg {
+      font-size: 13px;
+      color: #6e6e73;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chat-item .right-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 4px;
+      padding-left: 8px;
     }
     .chat-time {
       font-size: 12px;
       color: #8e8e93;
-      position: absolute;
-      top: 8px;
-      right: 12px;
       white-space: nowrap;
+    }
+    .msg-status-dots {
+      display: flex;
+      gap: 2px;
+    }
+    .msg-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c7c7cc;
+    }
+    .msg-status-dot.sent {
+      background: #c7c7cc;
+    }
+    .msg-status-dot.delivered {
+      background: #c7c7cc;
+    }
+    .msg-status-dot.read {
+      background: #007aff;
     }
   </style>
 </head>
@@ -220,15 +270,19 @@
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const msgDateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((todayStart - msgDateStart) / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffDays > 0 && diffDays <= 7) {
+    if (diffDays === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffDays > 0 && diffDays <= 7) {
       const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
       return days[date.getDay()];
-    } else {
-      return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
     }
+    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  }
+
+  // Функция проверки, онлайн ли пользователь (последняя активность менее 5 минут)
+  function isUserOnline(lastSeen) {
+    if (!lastSeen) return false;
+    const now = new Date();
+    return (now - lastSeen) < 5 * 60 * 1000;
   }
 
   setInterval(() => {
@@ -557,14 +611,39 @@
           const lastMsg = c.lastMessage ? c.lastMessage.text : '';
           const lastMsgTime = c.lastMessage?.time ? c.lastMessage.time.toDate() : null;
           const timeDisplay = formatChatTime(lastMsgTime);
+          const lastMsgSender = c.lastMessage?.sender;
+          const lastMsgStatus = c.lastMessage?.status;
+
+          // Онлайн-статус собеседника
+          const lastSeen = otherUser.lastSeen ? otherUser.lastSeen.toDate() : null;
+          const online = isUserOnline(lastSeen);
+
+          // Статусные точки для последнего сообщения (только если оно моё)
+          let statusDotsHTML = '';
+          if (lastMsgSender === currentUser.id) {
+            if (lastMsgStatus === 'pending') {
+              statusDotsHTML = '<div class="msg-status-dots"><span class="msg-status-dot sent"></span></div>';
+            } else if (lastMsgStatus === 'sent' || lastMsgStatus === 'delivered') {
+              statusDotsHTML = '<div class="msg-status-dots"><span class="msg-status-dot sent"></span><span class="msg-status-dot sent"></span></div>';
+            } else if (lastMsgStatus === 'read') {
+              statusDotsHTML = '<div class="msg-status-dots"><span class="msg-status-dot read"></span><span class="msg-status-dot read"></span></div>';
+            }
+          }
+
           return `
-            <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer; padding-left: 0;">
+            <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer; padding: 10px 12px; display: flex; align-items: center;">
               <div class="avatar" style="background-image:url(${mainPhoto})"></div>
-              <div style="flex:1; padding-right: 50px;">
-                <strong>${otherUser.name || 'Пользователь'}</strong>
-                <div style="font-size:13px; color:#6e6e73;">${lastMsg}</div>
+              <div class="chat-info">
+                <div class="name-row">
+                  <strong>${otherUser.name || 'Пользователь'}</strong>
+                  <span class="online-dot ${online ? 'online' : 'offline'}"></span>
+                </div>
+                <div class="last-msg">${lastMsg}</div>
               </div>
-              ${timeDisplay ? `<div class="chat-time">${timeDisplay}</div>` : ''}
+              <div class="right-col">
+                ${timeDisplay ? `<div class="chat-time">${timeDisplay}</div>` : ''}
+                ${statusDotsHTML}
+              </div>
             </div>
           `;
         }).join('');
@@ -1042,6 +1121,12 @@
     const text = textarea.value.trim();
     const replyTo = textarea.dataset.replyTo || null;
     if (type === 'text' && !text) return;
+
+    // Оптимистично обновляем lastMessage со статусом pending
+    await db.collection('chats').doc(currentChatId).update({
+      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'pending' }
+    });
+
     const msgData = {
       sender: currentUser.id,
       senderName: currentUser.name,
@@ -1054,8 +1139,9 @@
       if (snap.exists) msgData.replyToText = snap.data().text?.substring(0, 50);
     }
     await db.collection('chats').doc(currentChatId).collection('messages').add(msgData);
+    // После успешной отправки меняем статус на sent
     await db.collection('chats').doc(currentChatId).update({
-      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date() }
+      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'sent' }
     });
     textarea.value = '';
     textarea.style.height = 'auto';
@@ -1077,6 +1163,16 @@
     const batch = db.batch();
     msgs.forEach(doc => batch.update(doc.ref, { status: 'read' }));
     await batch.commit();
+
+    // Если последнее сообщение в чате было от собеседника, меняем его статус на read
+    const chatDoc = await db.collection('chats').doc(chatId).get();
+    const chatData = chatDoc.data();
+    if (chatData.lastMessage && chatData.lastMessage.sender !== currentUser.id) {
+      await db.collection('chats').doc(chatId).update({
+        'lastMessage.status': 'read'
+      });
+    }
+
     unreadCount -= msgs.size;
     if (unreadCount < 0) unreadCount = 0;
     updateUnreadBadge();
