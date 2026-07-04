@@ -123,7 +123,6 @@
 </head>
 <body>
 <div class="app-container" id="appContainer">
-  <!-- Сайдбар -->
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <div class="sidebar" id="sidebar">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -137,7 +136,6 @@
     <div class="sidebar-item" data-tab="settings"><span>👤</span> Настройки</div>
   </div>
 
-  <!-- Экраны входа/регистрации -->
   <div class="screen active" id="loginScreen">
     <h2 style="font-size:28px; font-weight:700; margin:40px 0 8px;">Вход</h2>
     <input class="ios-input" type="tel" id="loginPhone" placeholder="+71234567890">
@@ -156,7 +154,6 @@
     <button class="ios-btn" id="registerBtn">Зарегистрироваться</button>
   </div>
 
-  <!-- Главный экран -->
   <div class="screen" id="mainScreen">
     <div id="tabContent"></div>
   </div>
@@ -184,7 +181,6 @@
   let chatUnsubscribe = null, currentChatId = null, currentPartnerId = null;
   let lastDate = null;
 
-  // Сайдбар
   const sidebar = document.getElementById('sidebar');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
   function openSidebar() { sidebar.classList.add('open'); sidebarOverlay.classList.add('show'); }
