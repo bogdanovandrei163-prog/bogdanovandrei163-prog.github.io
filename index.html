@@ -52,6 +52,7 @@
     .ios-btn { background: #007aff; color: white; border: none; border-radius: 12px; padding: 14px; font-size: 17px; font-weight: 600; width: 100%; margin-top: 6px; cursor: pointer; transition: opacity 0.2s; }
     .ios-btn:active { opacity: 0.7; }
     .ios-btn.secondary { background: #e9e9ef; color: #007aff; }
+    .ios-btn.danger { background: #ff3b30; color: white; }
     .card { background: #fff; border-radius: 16px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     .reminder-item, .chat-item, .task-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 0.5px solid #e5e5ea; }
     .reminder-item:last-child, .chat-item:last-child, .task-item:last-child { border-bottom: none; }
@@ -231,7 +232,7 @@
     <input class="ios-input" type="password" id="loginPassword" placeholder="Пароль">
     <button class="ios-btn" id="loginBtn">Войти</button>
     <p style="margin-top:16px; text-align:center;"><a href="#" id="goToRegister" style="color:#007aff; text-decoration:none;">Зарегистрироваться</a></p>
-    <p style="color:#8e8e93; font-size:13px; text-align:center; margin-top:8px;">Введите ваш номер и пароль</p>
+    <p style="margin-top:8px; text-align:center;"><a href="#" id="forgotPasswordLink" style="color:#8e8e93; text-decoration:none;">Забыли пароль?</a></p>
   </div>
   <div class="screen" id="registerScreen">
     <button class="ios-btn secondary" style="width:auto; margin-bottom:20px;" id="backToLogin">← Назад</button>
@@ -351,7 +352,6 @@
       if (userDoc.exists) {
         currentUser = { id: user.uid, ...userDoc.data(), photos: userDoc.data().photos || [] };
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
-        // Запрашиваем разрешение на уведомления при входе
         if ('Notification' in window && Notification.permission === 'default') {
           Notification.requestPermission();
         }
@@ -377,17 +377,56 @@
 
   $('#goToRegister').addEventListener('click', e => { e.preventDefault(); showScreen(screens.register); });
   $('#backToLogin').addEventListener('click', e => { e.preventDefault(); showScreen(screens.login); });
+
+  // Восстановление пароля
+  $('#forgotPasswordLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal-sheet">
+        <h3 style="margin-bottom:16px;">Восстановление пароля</h3>
+        <input class="ios-input" id="resetPhone" type="tel" placeholder="Номер телефона">
+        <button class="ios-btn" id="sendResetBtn">Отправить ссылку</button>
+        <button class="ios-btn secondary" id="closeResetModal">Отмена</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#closeResetModal').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#sendResetBtn').addEventListener('click', async () => {
+      const phone = overlay.querySelector('#resetPhone').value.trim();
+      if (!phone) return alert('Введите номер телефона');
+      try {
+        await auth.sendPasswordResetEmail(phoneToEmail(phone));
+        alert('Ссылка для сброса пароля отправлена на указанный номер.');
+        overlay.remove();
+      } catch (error) {
+        alert('Ошибка: ' + error.message);
+      }
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  });
+
   $('#loginBtn').addEventListener('click', async () => {
     const phone = $('#loginPhone').value.trim(), pwd = $('#loginPassword').value.trim();
     if (!phone || !pwd) return alert('Заполните все поля');
     try { await auth.signInWithEmailAndPassword(phoneToEmail(phone), pwd); } catch (e) { alert('Ошибка входа: ' + e.message); }
   });
+
   $('#registerBtn').addEventListener('click', async () => {
     const phone = $('#regPhone').value.trim(), pwd = $('#regPassword').value.trim(),
           pwd2 = $('#regPasswordConfirm').value.trim(), name = $('#regName').value.trim();
     if (!phone || !pwd || !name) return alert('Заполните все поля');
     if (pwd !== pwd2) return alert('Пароли не совпадают');
     if (pwd.length < 6) return alert('Пароль минимум 6 символов');
+
+    // Проверка на уникальность номера телефона
+    const existing = await db.collection('users').where('phone', '==', phone).get();
+    if (!existing.empty) {
+      return alert('Пользователь с таким номером телефона уже зарегистрирован.');
+    }
+
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), pwd);
       await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
@@ -998,7 +1037,6 @@
     return date.toLocaleDateString();
   }
 
-  // ========== УВЕДОМЛЕНИЯ О СООБЩЕНИЯХ ==========
   function showMessageNotification(msg) {
     if (Notification.permission === 'granted') {
       new Notification(msg.senderName || 'Новое сообщение', {
@@ -1008,7 +1046,6 @@
     }
   }
 
-  // Обновление слушателя сообщений для показа уведомлений
   function listenMessages(chatId) {
     const container = document.getElementById('messagesContainer');
     if (!container) return;
@@ -1031,7 +1068,6 @@
               const msg = { id: change.doc.id, ...change.doc.data() };
               appendMessage(msg, container, false);
               container.scrollTop = container.scrollHeight;
-              // Показываем уведомление, если вкладка не активна или чат не открыт
               if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
                 showMessageNotification(msg);
               }
@@ -1334,12 +1370,42 @@
         <p><strong>Никнейм:</strong> ${u.nick || 'не указан'}</p>
       </div>
       <button class="ios-btn" id="editProfileBtn">Редактировать</button>
+      <button class="ios-btn danger" id="deleteAccountBtn">Удалить аккаунт</button>
       <button class="ios-btn secondary" id="logoutBtn" style="margin-top:8px;">Выйти</button>
     `;
     const avatarEl = document.getElementById('profileAvatar');
     avatarEl.addEventListener('click', () => { if (u.photos?.length > 0) openGallery(u.photos.map(p => p.url)); });
     $('#editProfileBtn').addEventListener('click', openEditProfile);
     $('#logoutBtn').addEventListener('click', () => auth.signOut());
+
+    // Удаление аккаунта
+    $('#deleteAccountBtn').addEventListener('click', () => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div class="modal-sheet">
+          <h3 style="margin-bottom:16px;">Удаление аккаунта</h3>
+          <p style="margin-bottom:16px; color:#ff3b30;">Внимание! Это действие нельзя отменить. Все ваши данные будут удалены.</p>
+          <button class="ios-btn danger" id="confirmDeleteBtn">Подтвердить удаление</button>
+          <button class="ios-btn secondary" id="closeDeleteModal">Отмена</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.querySelector('#closeDeleteModal').addEventListener('click', () => overlay.remove());
+      overlay.querySelector('#confirmDeleteBtn').addEventListener('click', async () => {
+        try {
+          await db.collection('users').doc(currentUser.id).delete();
+          await firebaseUser.delete();
+          overlay.remove();
+          alert('Аккаунт успешно удален.');
+          auth.signOut();
+        } catch (error) {
+          alert('Ошибка при удалении аккаунта: ' + error.message);
+        }
+      });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    });
   }
 
   function openEditProfile() {
@@ -1444,7 +1510,6 @@
     });
   }
 
-  // Запрос разрешения на уведомления при загрузке, если ещё не запрошено
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
   }
