@@ -95,6 +95,37 @@
     }
 
     /* Новые стили для превью чата */
+    .chat-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 8px 8px;
+    }
+    .chat-tools .ios-input {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .add-chat-btn {
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      width: 44px;
+      height: 44px;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .slip-label {
+      text-align: center;
+      color: #8e8e93;
+      font-size: 11px;
+      margin: 8px 0 4px;
+      letter-spacing: 1px;
+    }
     .chat-item .chat-info {
       flex: 1;
       padding-right: 8px;
@@ -103,7 +134,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 2px;
+      margin-bottom: 0px;
     }
     .chat-item .name-row strong {
       font-size: 17px;
@@ -278,7 +309,6 @@
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
   }
 
-  // Функция проверки, онлайн ли пользователь (последняя активность менее 5 минут)
   function isUserOnline(lastSeen) {
     if (!lastSeen) return false;
     const now = new Date();
@@ -363,7 +393,10 @@
         <div class="section-header">
           <button class="burger-btn open-sidebar-btn">☰</button>
           <h2>${title}</h2>
-          <input class="ios-input" id="searchUserInput" placeholder="🔍 Поиск" style="flex:1; margin-left:10px;">
+        </div>
+        <div class="chat-tools">
+          <input class="ios-input" id="searchUserInput" placeholder="🔍 Поиск">
+          <button class="add-chat-btn" id="addChatBtn">+</button>
         </div>
         <div class="section-body" id="sectionBody"></div>
       `;
@@ -537,6 +570,7 @@
   function renderChats(body) {
     body.innerHTML = `
       <div id="searchResults" class="search-results" style="display:none;"></div>
+      <div class="slip-label">Slip</div>
       <div id="chatsList"></div>
     `;
 
@@ -591,6 +625,12 @@
       }
     });
 
+    // Кнопка "+" для создания чата
+    const addBtn = document.getElementById('addChatBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => openNewChatModal());
+    }
+
     const listEl = $('#chatsList');
     unsubscribeChats = db.collection('chats')
       .where('participants', 'array-contains', currentUser.id)
@@ -604,6 +644,12 @@
           listEl.innerHTML = '<p style="color:#8e8e93; text-align:center; margin-top:20px;">Нет чатов</p>';
           return;
         }
+        // Сортировка по времени последнего сообщения (свежие сверху)
+        chats.sort((a, b) => {
+          const timeA = a.lastMessage?.time ? a.lastMessage.time.toDate().getTime() : 0;
+          const timeB = b.lastMessage?.time ? b.lastMessage.time.toDate().getTime() : 0;
+          return timeB - timeA;
+        });
         listEl.innerHTML = chats.map(c => {
           const otherId = c.participants.find(id => id !== currentUser.id);
           const otherUser = usersMap[otherId] || {};
@@ -614,11 +660,9 @@
           const lastMsgSender = c.lastMessage?.sender;
           const lastMsgStatus = c.lastMessage?.status;
 
-          // Онлайн-статус собеседника
           const lastSeen = otherUser.lastSeen ? otherUser.lastSeen.toDate() : null;
           const online = isUserOnline(lastSeen);
 
-          // Статусные точки для последнего сообщения (только если оно моё)
           let statusDotsHTML = '';
           if (lastMsgSender === currentUser.id) {
             if (lastMsgStatus === 'pending') {
@@ -653,7 +697,8 @@
       });
   }
 
-  async function openCreateGroupChatModal() {
+  // Модальное окно создания нового чата (с выбором пользователей или без)
+  async function openNewChatModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.display = 'flex';
@@ -662,24 +707,21 @@
     usersSnap.forEach(doc => { if (doc.id !== currentUser.id) otherUsers.push({ id: doc.id, ...doc.data() }); });
     overlay.innerHTML = `
       <div class="modal-sheet">
-        <h3>Новый групповой чат</h3>
-        <input class="ios-input" id="groupNameInput" placeholder="Название группы">
-        <p>Выберите участников:</p>
-        <div id="groupParticipantsSelect" style="max-height:150px; overflow-y:auto; margin-bottom:12px;">
+        <h3>Новый чат</h3>
+        <p>Выберите участников (или создайте без участников):</p>
+        <div id="newChatParticipants" style="max-height:150px; overflow-y:auto; margin-bottom:12px;">
           ${otherUsers.map(u => `<label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" value="${u.id}"> ${u.name} (${u.phone})</label>`).join('<br>')}
-          ${otherUsers.length===0 ? '<p style="color:#8e8e93;">Нет других пользователей.</p>' : ''}
         </div>
-        <button class="ios-btn" id="saveGroupChatBtn">Создать</button>
-        <button class="ios-btn secondary" id="closeGroupChatModal">Отмена</button>
+        <button class="ios-btn" id="saveNewChatBtn">Создать</button>
+        <button class="ios-btn secondary" id="closeNewChatModal">Отмена</button>
       </div>
     `;
     document.body.appendChild(overlay);
-    overlay.querySelector('#closeGroupChatModal').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#saveGroupChatBtn').addEventListener('click', async () => {
-      const groupName = overlay.querySelector('#groupNameInput').value.trim() || 'Группа';
-      const checks = [...overlay.querySelectorAll('#groupParticipantsSelect input:checked')].map(cb => cb.value);
-      if (checks.length === 0) return alert('Выберите хотя бы одного участника');
-      await db.collection('chats').add({ participants: [currentUser.id, ...checks], isGroup: true, groupName });
+    overlay.querySelector('#closeNewChatModal').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#saveNewChatBtn').addEventListener('click', async () => {
+      const checks = [...overlay.querySelectorAll('#newChatParticipants input:checked')].map(cb => cb.value);
+      const participants = [currentUser.id, ...checks];
+      await db.collection('chats').add({ participants, isGroup: checks.length > 0, groupName: '' });
       overlay.remove();
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
@@ -1122,7 +1164,6 @@
     const replyTo = textarea.dataset.replyTo || null;
     if (type === 'text' && !text) return;
 
-    // Оптимистично обновляем lastMessage со статусом pending
     await db.collection('chats').doc(currentChatId).update({
       lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'pending' }
     });
@@ -1139,7 +1180,6 @@
       if (snap.exists) msgData.replyToText = snap.data().text?.substring(0, 50);
     }
     await db.collection('chats').doc(currentChatId).collection('messages').add(msgData);
-    // После успешной отправки меняем статус на sent
     await db.collection('chats').doc(currentChatId).update({
       lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'sent' }
     });
@@ -1164,7 +1204,6 @@
     msgs.forEach(doc => batch.update(doc.ref, { status: 'read' }));
     await batch.commit();
 
-    // Если последнее сообщение в чате было от собеседника, меняем его статус на read
     const chatDoc = await db.collection('chats').doc(chatId).get();
     const chatData = chatDoc.data();
     if (chatData.lastMessage && chatData.lastMessage.sender !== currentUser.id) {
