@@ -452,9 +452,10 @@ audio { width: 200px; margin: 4px 0; }
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   }
 
-  /function renderChats(body) {
+  // ========== ЧАТЫ ==========
+  function renderChats(body) {
     body.innerHTML = `
-      <!-- Заголовок и поиск в одной строке -->
+      <!-- Заголовок и поиск в одной строке, прямо внутри вкладки -->
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
         <h2 style="margin:0; font-size:24px; white-space:nowrap;">Чаты</h2>
         <input class="ios-input" id="searchUserInput" placeholder="🔍 Поиск" style="flex:1;">
@@ -462,11 +463,9 @@ audio { width: 200px; margin: 4px 0; }
       <div id="searchResults" class="search-results" style="display:none;"></div>
       <div id="chatsList"></div>
     `;
-
     const searchInput = $('#searchUserInput');
     const searchResults = $('#searchResults');
     let searchTimeout;
-
     searchInput.addEventListener('input', () => {
       clearTimeout(searchTimeout);
       const query = searchInput.value.trim();
@@ -504,7 +503,6 @@ audio { width: 200px; margin: 4px 0; }
         searchResults.style.display = 'block';
       }, 300);
     });
-
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#searchUserInput') && !e.target.closest('#searchResults')) searchResults.style.display = 'none';
     });
@@ -541,7 +539,516 @@ audio { width: 200px; margin: 4px 0; }
           el.addEventListener('click', () => openChatScreen(el.dataset.chatId));
         });
       });
-}
+  }
+
+  async function openCreateGroupChatModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    const usersSnap = await db.collection('users').get();
+    const otherUsers = [];
+    usersSnap.forEach(doc => { if (doc.id !== currentUser.id) otherUsers.push({ id: doc.id, ...doc.data() }); });
+    overlay.innerHTML = `
+      <div class="modal-sheet">
+        <h3>Новый групповой чат</h3>
+        <input class="ios-input" id="groupNameInput" placeholder="Название группы">
+        <p>Выберите участников:</p>
+        <div id="groupParticipantsSelect" style="max-height:150px; overflow-y:auto; margin-bottom:12px;">
+          ${otherUsers.map(u => `<label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" value="${u.id}"> ${u.name} (${u.phone})</label>`).join('<br>')}
+          ${otherUsers.length===0 ? '<p style="color:#8e8e93;">Нет других пользователей.</p>' : ''}
+        </div>
+        <button class="ios-btn" id="saveGroupChatBtn">Создать</button>
+        <button class="ios-btn secondary" id="closeGroupChatModal">Отмена</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#closeGroupChatModal').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#saveGroupChatBtn').addEventListener('click', async () => {
+      const groupName = overlay.querySelector('#groupNameInput').value.trim() || 'Группа';
+      const checks = [...overlay.querySelectorAll('#groupParticipantsSelect input:checked')].map(cb => cb.value);
+      if (checks.length === 0) return alert('Выберите хотя бы одного участника');
+      await db.collection('chats').add({ participants: [currentUser.id, ...checks], isGroup: true, groupName });
+      overlay.remove();
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  async function createOrOpenChat(targetUserId) {
+    const existing = await db.collection('chats').where('participants', 'array-contains', currentUser.id).get();
+    let chatId = null;
+    for (let doc of existing.docs) {
+      const parts = doc.data().participants;
+      if (parts.includes(targetUserId) && parts.length === 2 && !doc.data().isGroup) { chatId = doc.id; break; }
+    }
+    if (!chatId) {
+      const docRef = await db.collection('chats').add({ participants: [currentUser.id, targetUserId], isGroup: false, groupName: '' });
+      chatId = docRef.id;
+    }
+    openChatScreen(chatId);
+  }
+
+  function openChatScreen(chatId) {
+    if (currentChatId) closeChatScreen();
+    currentChatId = chatId;
+    const container = $('#tabContent');
+    container.classList.add('chat-open');
+    // Абсолютное позиционирование гарантирует, что чат займёт весь tabContent и не будет скролла всей страницы
+    container.innerHTML = `
+      <div class="chat-screen" id="chatScreen">
+        <div class="chat-header" id="chatHeader">
+          <button class="ios-btn secondary" id="backToChats" style="width:auto; padding:8px 12px;">← Назад</button>
+          <div class="avatar" id="chatPartnerAvatar" style="width:36px; height:36px;"></div>
+          <div class="user-info">
+            <strong id="chatPartnerName"></strong>
+            <div class="user-status" id="chatPartnerStatus"></div>
+          </div>
+        </div>
+        <div class="messages-container" id="messagesContainer"></div>
+        <div class="input-area">
+          <button class="ios-btn secondary" id="attachMediaBtn" style="width:auto; padding:10px;">📎</button>
+          <textarea class="chat-textarea" id="messageInput" placeholder="Сообщение..." rows="1"></textarea>
+          <button class="ios-btn" id="sendMsgBtn" style="width:auto; padding:10px 16px;">Отправить</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('backToChats').addEventListener('click', () => {
+      closeChatScreen();
+      activateTab('chats');
+    });
+
+    loadChatInfo(chatId).then(partnerId => {
+      currentPartnerId = partnerId;
+      document.getElementById('chatHeader').addEventListener('click', () => {
+        if (currentPartnerId) openUserProfile(currentPartnerId);
+      });
+    });
+
+    listenMessages(chatId);
+    markMessagesAsRead(chatId);
+
+    const textarea = document.getElementById('messageInput');
+    textarea.addEventListener('input', autoResize);
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage('text');
+      }
+    });
+  }
+
+  function autoResize() {
+    const textarea = document.getElementById('messageInput');
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = (textarea.scrollHeight) + 'px';
+  }
+
+  function closeChatScreen() {
+    if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+    currentChatId = null; currentPartnerId = null;
+    const container = $('#tabContent');
+    container.classList.remove('chat-open');
+    container.innerHTML = '';
+  }
+
+  async function loadChatInfo(chatId) {
+    const chatDoc = await db.collection('chats').doc(chatId).get();
+    const chat = chatDoc.data();
+    const otherId = chat.participants.find(id => id !== currentUser.id);
+    const userDoc = await db.collection('users').doc(otherId).get();
+    const userData = userDoc.data();
+    document.getElementById('chatPartnerName').textContent = userData.name || 'Пользователь';
+    document.getElementById('chatPartnerAvatar').style.backgroundImage = `url(${getMainPhoto(userData.photos)})`;
+
+    const lastSeen = userData.lastSeen ? userData.lastSeen.toDate() : null;
+    const statusEl = document.getElementById('chatPartnerStatus');
+    if (lastSeen) {
+      const now = new Date();
+      const diffHours = (now - lastSeen) / (1000 * 60 * 60);
+      const timeStr = lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (diffHours < 24) {
+        statusEl.textContent = `был(а) в сети в ${timeStr}`;
+      } else {
+        statusEl.textContent = `был(а) в сети ${lastSeen.toLocaleDateString()} в ${timeStr}`;
+      }
+    } else {
+      statusEl.textContent = 'давно не заходил(а)';
+    }
+    return otherId;
+  }
+
+  async function openUserProfile(userId) {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return alert('Пользователь не найден');
+    const u = userDoc.data();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    const now = new Date();
+    const lastSeen = u.lastSeen ? u.lastSeen.toDate() : null;
+    const online = lastSeen && (now - lastSeen) < 5 * 60 * 1000;
+    const lastSeenStr = lastSeen ? `Был(а) ${formatLastSeen(lastSeen)}` : 'давно';
+    const mainPhoto = getMainPhoto(u.photos);
+    const birthdateStr = u.birthdate ? new Date(u.birthdate).toLocaleDateString() : 'не указана';
+    let ageDisplay = '';
+    if (u.birthdate) {
+      const today = new Date();
+      const birth = new Date(u.birthdate);
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      ageDisplay = age + ' лет';
+    } else { ageDisplay = '—'; }
+
+    overlay.innerHTML = `
+      <div class="modal-sheet" style="text-align:center; position:relative;">
+        <button class="ios-btn secondary" id="closeUserProfile" style="position:absolute; top:10px; right:10px; width:auto; padding:8px;">✕</button>
+        <div class="large-avatar" id="largeAvatar" style="background-image:url(${mainPhoto})"></div>
+        <h2>${u.name}</h2>
+        ${u.nick ? `<p style="color:#8e8e93;">@${u.nick}</p>` : ''}
+        <div style="margin:10px 0;">
+          <span class="online-indicator ${online ? '' : 'offline-indicator'}"></span>
+          ${online ? 'В сети' : lastSeenStr}
+        </div>
+        <div class="card">
+          ${!u.hidePhone ? `<p><strong>Телефон:</strong> ${u.phone}</p>` : ''}
+          ${!u.hideBirthdate ? `<p><strong>Дата рождения:</strong> ${birthdateStr} (${ageDisplay})</p>` : ''}
+          <p><strong>Город:</strong> ${u.city || '—'}</p>
+        </div>
+        <button class="ios-btn" id="writeMessageBtn" style="margin-top:10px;">Написать</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#closeUserProfile').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#largeAvatar').addEventListener('click', () => {
+      if (u.photos?.length > 0) openGallery(u.photos.map(p => p.url));
+    });
+    overlay.querySelector('#writeMessageBtn').addEventListener('click', () => {
+      overlay.remove();
+      if (currentPartnerId === userId) return;
+      createOrOpenChat(userId);
+    });
+  }
+
+  function openGallery(photoUrls) {
+    const galleryOverlay = document.createElement('div');
+    galleryOverlay.className = 'gallery-overlay';
+    galleryOverlay.style.display = 'flex';
+    let currentIndex = 0;
+    const img = document.createElement('img');
+    img.className = 'gallery-image';
+    img.src = photoUrls[currentIndex];
+    galleryOverlay.appendChild(img);
+    const controls = document.createElement('div');
+    controls.className = 'gallery-controls';
+    controls.innerHTML = '<button id="prevPhoto">←</button><button id="nextPhoto">→</button>';
+    galleryOverlay.appendChild(controls);
+    controls.querySelector('#prevPhoto').addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; img.src = photoUrls[currentIndex]; } });
+    controls.querySelector('#nextPhoto').addEventListener('click', () => { if (currentIndex < photoUrls.length - 1) { currentIndex++; img.src = photoUrls[currentIndex]; } });
+    galleryOverlay.addEventListener('click', (e) => { if (e.target === galleryOverlay) galleryOverlay.remove(); });
+    document.body.appendChild(galleryOverlay);
+  }
+
+  function formatLastSeen(date) {
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'только что';
+    if (mins < 60) return `${mins} мин. назад`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} ч. назад`;
+    return date.toLocaleDateString();
+  }
+
+  function showMessageNotification(msg) {
+    if (Notification.permission === 'granted') {
+      new Notification(msg.senderName || 'Новое сообщение', {
+        body: msg.text || '📎 Медиа',
+        icon: 'icon.png'
+      });
+    }
+  }
+
+  let unreadCount = 0;
+  const unreadBadge = document.getElementById('unreadBadge');
+  function updateUnreadBadge() {
+    if (!unreadBadge) return;
+    if (unreadCount > 0) {
+      unreadBadge.textContent = unreadCount;
+      unreadBadge.style.display = 'inline';
+    } else {
+      unreadBadge.style.display = 'none';
+    }
+  }
+  async function initialUnreadCount() {
+    if (!currentUser) return;
+    const chatsSnap = await db.collection('chats')
+      .where('participants', 'array-contains', currentUser.id)
+      .get();
+    let count = 0;
+    for (const doc of chatsSnap.docs) {
+      const msgsSnap = await doc.ref.collection('messages')
+        .where('sender', '!=', currentUser.id)
+        .where('status', '==', 'sent')
+        .get();
+      count += msgsSnap.size;
+    }
+    unreadCount = count;
+    updateUnreadBadge();
+  }
+
+  function listenMessages(chatId) {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+    let initialLoad = true;
+    lastDate = null;
+    chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
+      .orderBy('time', 'asc')
+      .onSnapshot(snapshot => {
+        if (initialLoad) {
+          container.innerHTML = '';
+          snapshot.forEach(doc => {
+            const msg = { id: doc.id, ...doc.data() };
+            appendMessage(msg, container, true);
+          });
+          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+          initialLoad = false;
+        } else {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const msg = { id: change.doc.id, ...change.doc.data() };
+              appendMessage(msg, container, false);
+              container.scrollTop = container.scrollHeight;
+              if (msg.sender !== currentUser.id && document.hidden) {
+                showMessageNotification(msg);
+              }
+              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
+                unreadCount++;
+                updateUnreadBadge();
+              }
+            }
+          });
+        }
+      });
+  }
+
+  function appendMessage(msg, container, isInitial) {
+    let msgDate;
+    if (msg.time && msg.time.toDate) {
+      msgDate = new Date(msg.time.toDate());
+    } else {
+      msgDate = new Date();
+    }
+    const dateStr = msgDate.toLocaleDateString();
+    if (isInitial) {
+      if (dateStr !== lastDate) {
+        lastDate = dateStr;
+        const sep = document.createElement('div'); sep.className = 'date-separator'; sep.textContent = formatDateSeparator(msgDate);
+        container.appendChild(sep);
+      }
+    } else {
+      const last = container.lastElementChild;
+      if (last && last.className === 'date-separator') {
+        if (last.textContent !== formatDateSeparator(msgDate)) {
+          const sep = document.createElement('div'); sep.className = 'date-separator'; sep.textContent = formatDateSeparator(msgDate);
+          container.appendChild(sep);
+        }
+      } else if (!last || last.className !== 'date-separator') {
+        const sep = document.createElement('div'); sep.className = 'date-separator'; sep.textContent = formatDateSeparator(msgDate);
+        container.appendChild(sep);
+      }
+    }
+    renderMessage(msg, container);
+  }
+
+  function formatDateSeparator(date) {
+    const now = new Date();
+    const today = now.toLocaleDateString();
+    const yesterday = new Date(now.setDate(now.getDate() - 1)).toLocaleDateString();
+    const msgDate = date.toLocaleDateString();
+    if (msgDate === today) return 'Сегодня';
+    if (msgDate === yesterday) return 'Вчера';
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function renderMessage(msg, container) {
+    const isMy = msg.sender === currentUser.id;
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble ' + (isMy ? 'my-message' : 'their-message');
+    bubble.dataset.messageId = msg.id;
+
+    let content = '';
+    if (msg.type === 'text') content += msg.text;
+    else if (msg.type === 'image') content += `<img src="${msg.mediaUrl}" class="media-preview">`;
+    else if (msg.type === 'video') content += `<video controls class="media-preview"><source src="${msg.mediaUrl}" type="video/mp4"></video>`;
+    else if (msg.type === 'audio') content += `<audio controls src="${msg.mediaUrl}"></audio>`;
+    if (msg.replyTo && msg.replyToText) content = `<div style="font-size:12px; opacity:0.7; border-left:2px solid #007aff; padding-left:6px; margin-bottom:4px;">↩ ${msg.replyToText}</div>` + content;
+
+    let statusHTML = '';
+    if (isMy) {
+      if (msg.status === 'read') {
+        statusHTML = '<div class="status-dots"><span class="status-dot read"></span><span class="status-dot read"></span></div>';
+      } else if (msg.status === 'delivered') {
+        statusHTML = '<div class="status-dots"><span class="status-dot"></span><span class="status-dot"></span></div>';
+      } else {
+        statusHTML = '<div class="status-dots"><span class="status-dot"></span></div>';
+      }
+    }
+
+    const timeObj = msg.time && msg.time.toDate ? new Date(msg.time.toDate()) : new Date();
+    bubble.innerHTML = content + `<div class="message-meta"><span>${timeObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>${statusHTML}</div>`;
+    if (msg.reactions?.length) {
+      const rDiv = document.createElement('div'); rDiv.className = 'reactions';
+      msg.reactions.forEach(r => { const s = document.createElement('span'); s.className = 'reaction'; s.textContent = r; rDiv.appendChild(s); });
+      bubble.appendChild(rDiv);
+    }
+
+    let timer;
+    bubble.addEventListener('touchstart', e => { timer = setTimeout(() => showContextMenu(e, msg, bubble), 500); });
+    bubble.addEventListener('touchend', () => clearTimeout(timer));
+    bubble.addEventListener('touchmove', () => clearTimeout(timer));
+    container.appendChild(bubble);
+    return bubble;
+  }
+
+  function showContextMenu(e, msg, bubble) {
+    const existing = document.querySelector('.context-menu');
+    if (existing) existing.remove();
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.innerHTML = `
+      <button class="copy-msg">📋 Копировать</button>
+      <button class="reply-msg">↩ Ответить</button>
+      <button class="react-msg">😀 Реакция</button>
+    `;
+    const touch = e.touches ? e.touches[0] : e;
+    menu.style.top = touch.clientY + 'px';
+    menu.style.left = '20px';
+    document.body.appendChild(menu);
+    menu.style.display = 'block';
+    menu.querySelector('.copy-msg').onclick = () => { navigator.clipboard.writeText(msg.text || ''); menu.remove(); };
+    menu.querySelector('.reply-msg').onclick = () => {
+      const input = document.getElementById('messageInput');
+      if (input) { input.dataset.replyTo = msg.id; input.placeholder = 'Ответ на сообщение...'; }
+      menu.remove();
+    };
+    menu.querySelector('.react-msg').onclick = async () => {
+      const reaction = prompt('Введите смайлик:');
+      if (reaction) {
+        const msgRef = db.collection('chats').doc(currentChatId).collection('messages').doc(msg.id);
+        await msgRef.update({ reactions: firebase.firestore.FieldValue.arrayUnion(reaction) });
+      }
+      menu.remove();
+    };
+    setTimeout(() => menu.remove(), 4000);
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'sendMsgBtn') sendMessage('text');
+    if (e.target.id === 'attachMediaBtn') showMediaOptions();
+  });
+
+  function showMediaOptions() {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed'; overlay.style.top = 0; overlay.style.left = 0;
+    overlay.style.width = '100%'; overlay.style.height = '100%';
+    overlay.style.background = 'rgba(0,0,0,0.4)'; overlay.style.zIndex = 999;
+    overlay.innerHTML = `
+      <div style="position:absolute; bottom:20px; left:20px; right:20px; background:white; border-radius:16px; padding:16px;">
+        <button id="pickImageBtn" class="ios-btn" style="margin-bottom:8px;">📷 Фото / Видео</button>
+        <button id="recordAudioBtn" class="ios-btn secondary">🎤 Голосовое</button>
+        <button id="cancelMediaBtn" class="ios-btn secondary">Отмена</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#cancelMediaBtn').onclick = () => overlay.remove();
+    overlay.querySelector('#pickImageBtn').onclick = () => {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*,video/*';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          if (file.type.startsWith('image/')) {
+            const compressed = await compressImage(file);
+            await sendMessage('image', compressed);
+          } else {
+            if (file.size > 2 * 1024 * 1024) { alert('Видео слишком большое. Максимум 2 МБ.'); return; }
+            const reader = new FileReader();
+            reader.onload = async (ev) => { await sendMessage('video', ev.target.result); };
+            reader.readAsDataURL(file);
+          }
+          overlay.remove();
+        }
+      };
+      input.click();
+    };
+    overlay.querySelector('#recordAudioBtn').onclick = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        const chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          if (blob.size > 2 * 1024 * 1024) { alert('Голосовое сообщение слишком длинное.'); return; }
+          const reader = new FileReader();
+          reader.onload = async (ev) => { await sendMessage('audio', ev.target.result); overlay.remove(); };
+          reader.readAsDataURL(blob);
+        };
+        mediaRecorder.start();
+        setTimeout(() => mediaRecorder.stop(), 15000);
+      } catch (error) { alert('Нет доступа к микрофону'); }
+    };
+  }
+
+  async function sendMessage(type, mediaUrl = null) {
+    const textarea = document.getElementById('messageInput');
+    if (!textarea) return;
+    const text = textarea.value.trim();
+    const replyTo = textarea.dataset.replyTo || null;
+    if (type === 'text' && !text) return;
+    const msgData = {
+      sender: currentUser.id,
+      senderName: currentUser.name,
+      type, text: type === 'text' ? text : '', mediaUrl: mediaUrl || '',
+      time: firebase.firestore.FieldValue.serverTimestamp(),
+      status: 'sent', replyTo: replyTo || null, reactions: []
+    };
+    if (replyTo) {
+      const snap = await db.collection('chats').doc(currentChatId).collection('messages').doc(replyTo).get();
+      if (snap.exists) msgData.replyToText = snap.data().text?.substring(0, 50);
+    }
+    await db.collection('chats').doc(currentChatId).collection('messages').add(msgData);
+    await db.collection('chats').doc(currentChatId).update({
+      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date() }
+    });
+    textarea.value = '';
+    textarea.style.height = 'auto';
+    textarea.focus();
+    textarea.dataset.replyTo = '';
+    textarea.placeholder = 'Сообщение...';
+
+    const container = document.getElementById('messagesContainer');
+    if (container) {
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+    }
+  }
+
+  async function markMessagesAsRead(chatId) {
+    const msgs = await db.collection('chats').doc(chatId).collection('messages')
+      .where('sender', '!=', currentUser.id)
+      .where('status', '==', 'sent')
+      .get();
+    const batch = db.batch();
+    msgs.forEach(doc => batch.update(doc.ref, { status: 'read' }));
+    await batch.commit();
+    unreadCount -= msgs.size;
+    if (unreadCount < 0) unreadCount = 0;
+    updateUnreadBadge();
+  }
 
   // ========== ПРОФИЛЬ ==========
   function renderProfile(body) {
