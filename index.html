@@ -94,7 +94,6 @@
       min-height: 40px; max-height: 120px; overflow-y: auto; line-height: 1.4;
     }
 
-    /* Новые стили для превью чата */
     .chat-tools {
       display: flex;
       align-items: center;
@@ -123,7 +122,7 @@
       text-align: center;
       color: #8e8e93;
       font-size: 11px;
-      margin: 8px 0 4px;
+      margin: 2px 0 4px; /* уменьшено расстояние */
       letter-spacing: 1px;
     }
     .chat-item .chat-info {
@@ -134,7 +133,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 0px;
+      margin-bottom: 2px; /* небольшой отступ от сообщения */
     }
     .chat-item .name-row strong {
       font-size: 17px;
@@ -186,6 +185,28 @@
     }
     .msg-status-dot.read {
       background: #007aff;
+    }
+    .create-chat-avatar {
+      width: 70px;
+      height: 70px;
+      border-radius: 16px;
+      background: #c7c7cc;
+      background-size: cover;
+      background-position: center;
+      margin: 0 auto 10px;
+    }
+    .photo-upload-btn {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      background: #e9e9ef;
+      border: none;
+      border-radius: 12px;
+      color: #007aff;
+      font-size: 15px;
+      text-align: center;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -625,7 +646,6 @@
       }
     });
 
-    // Кнопка "+" для создания чата
     const addBtn = document.getElementById('addChatBtn');
     if (addBtn) {
       addBtn.addEventListener('click', () => openNewChatModal());
@@ -644,7 +664,6 @@
           listEl.innerHTML = '<p style="color:#8e8e93; text-align:center; margin-top:20px;">Нет чатов</p>';
           return;
         }
-        // Сортировка по времени последнего сообщения (свежие сверху)
         chats.sort((a, b) => {
           const timeA = a.lastMessage?.time ? a.lastMessage.time.toDate().getTime() : 0;
           const timeB = b.lastMessage?.time ? b.lastMessage.time.toDate().getTime() : 0;
@@ -697,31 +716,90 @@
       });
   }
 
-  // Модальное окно создания нового чата (с выбором пользователей или без)
+  // Модальное окно создания нового чата с выбором знакомых пользователей, названием и фото
   async function openNewChatModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.display = 'flex';
-    const usersSnap = await db.collection('users').get();
-    const otherUsers = [];
-    usersSnap.forEach(doc => { if (doc.id !== currentUser.id) otherUsers.push({ id: doc.id, ...doc.data() }); });
+
+    // Получаем чаты, где есть переписка (сообщения от другого пользователя)
+    const chatsSnap = await db.collection('chats')
+      .where('participants', 'array-contains', currentUser.id)
+      .get();
+
+    const knownUserIds = new Set();
+    for (const chatDoc of chatsSnap.docs) {
+      const messagesSnap = await chatDoc.ref.collection('messages')
+        .where('sender', '!=', currentUser.id)
+        .limit(1)
+        .get();
+      if (!messagesSnap.empty) {
+        const otherIds = chatDoc.data().participants.filter(id => id !== currentUser.id);
+        otherIds.forEach(id => knownUserIds.add(id));
+      }
+    }
+
+    // Загружаем данные этих пользователей
+    const knownUsers = [];
+    if (knownUserIds.size > 0) {
+      const usersSnap = await db.collection('users').get();
+      usersSnap.forEach(doc => {
+        if (knownUserIds.has(doc.id)) {
+          knownUsers.push({ id: doc.id, ...doc.data() });
+        }
+      });
+    }
+
+    let chatPhotoData = null; // base64 строка для фото чата
     overlay.innerHTML = `
       <div class="modal-sheet">
-        <h3>Новый чат</h3>
-        <p>Выберите участников (или создайте без участников):</p>
-        <div id="newChatParticipants" style="max-height:150px; overflow-y:auto; margin-bottom:12px;">
-          ${otherUsers.map(u => `<label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" value="${u.id}"> ${u.name} (${u.phone})</label>`).join('<br>')}
+        <h3>Создать чат</h3>
+        <input class="ios-input" id="newChatName" placeholder="Название чата">
+        <div class="create-chat-avatar" id="chatAvatarPreview" style="background-image:url('')"></div>
+        <button class="photo-upload-btn" id="uploadChatPhotoBtn">Выбрать фото</button>
+        <p>Участники (только те, с кем уже есть переписка):</p>
+        <div id="newChatParticipants" style="max-height:180px; overflow-y:auto; margin-bottom:12px;">
+          ${knownUsers.length > 0 ? knownUsers.map(u => `
+            <label style="display:flex; align-items:center; gap:8px; padding:6px 0;">
+              <input type="checkbox" value="${u.id}">
+              <div class="avatar" style="width:36px;height:36px;background-image:url(${getMainPhoto(u.photos)})"></div>
+              <span>${u.name} ${u.phone ? '('+u.phone+')' : ''}</span>
+            </label>
+          `).join('') : '<p style="color:#8e8e93;">Нет доступных собеседников</p>'}
         </div>
         <button class="ios-btn" id="saveNewChatBtn">Создать</button>
         <button class="ios-btn secondary" id="closeNewChatModal">Отмена</button>
       </div>
     `;
     document.body.appendChild(overlay);
+
+    const avatarPreview = overlay.querySelector('#chatAvatarPreview');
+    overlay.querySelector('#uploadChatPhotoBtn').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const compressed = await compressImage(file);
+          chatPhotoData = compressed;
+          avatarPreview.style.backgroundImage = `url(${compressed})`;
+        }
+      };
+      input.click();
+    });
+
     overlay.querySelector('#closeNewChatModal').addEventListener('click', () => overlay.remove());
     overlay.querySelector('#saveNewChatBtn').addEventListener('click', async () => {
+      const groupName = overlay.querySelector('#newChatName').value.trim() || 'Группа';
       const checks = [...overlay.querySelectorAll('#newChatParticipants input:checked')].map(cb => cb.value);
       const participants = [currentUser.id, ...checks];
-      await db.collection('chats').add({ participants, isGroup: checks.length > 0, groupName: '' });
+      await db.collection('chats').add({
+        participants,
+        isGroup: checks.length > 0,
+        groupName,
+        photoUrl: chatPhotoData || ''
+      });
       overlay.remove();
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
