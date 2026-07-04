@@ -122,7 +122,7 @@
       text-align: center;
       color: #8e8e93;
       font-size: 11px;
-      margin: 2px 0 4px; /* уменьшено расстояние */
+      margin: 2px 0 4px;
       letter-spacing: 1px;
     }
     .chat-item .chat-info {
@@ -133,7 +133,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 2px; /* небольшой отступ от сообщения */
+      margin-bottom: 2px;
     }
     .chat-item .name-row strong {
       font-size: 17px;
@@ -351,6 +351,10 @@
       if (userDoc.exists) {
         currentUser = { id: user.uid, ...userDoc.data(), photos: userDoc.data().photos || [] };
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
+        // Запрашиваем разрешение на уведомления при входе
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
         showScreen(screens.main);
         activateTab('interesting');
         initialUnreadCount();
@@ -359,6 +363,9 @@
         const newUser = { phone, name: phone, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() };
         await db.collection('users').doc(user.uid).set(newUser);
         currentUser = { id: user.uid, ...newUser, lastSeen: new Date() };
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
         showScreen(screens.main);
         activateTab('interesting');
       }
@@ -716,13 +723,11 @@
       });
   }
 
-  // Модальное окно создания нового чата с выбором знакомых пользователей, названием и фото
   async function openNewChatModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.display = 'flex';
 
-    // Получаем чаты, где есть переписка (сообщения от другого пользователя)
     const chatsSnap = await db.collection('chats')
       .where('participants', 'array-contains', currentUser.id)
       .get();
@@ -739,7 +744,6 @@
       }
     }
 
-    // Загружаем данные этих пользователей
     const knownUsers = [];
     if (knownUserIds.size > 0) {
       const usersSnap = await db.collection('users').get();
@@ -750,7 +754,7 @@
       });
     }
 
-    let chatPhotoData = null; // base64 строка для фото чата
+    let chatPhotoData = null;
     overlay.innerHTML = `
       <div class="modal-sheet">
         <h3>Создать чат</h3>
@@ -994,6 +998,7 @@
     return date.toLocaleDateString();
   }
 
+  // ========== УВЕДОМЛЕНИЯ О СООБЩЕНИЯХ ==========
   function showMessageNotification(msg) {
     if (Notification.permission === 'granted') {
       new Notification(msg.senderName || 'Новое сообщение', {
@@ -1001,6 +1006,43 @@
         icon: 'icon.png'
       });
     }
+  }
+
+  // Обновление слушателя сообщений для показа уведомлений
+  function listenMessages(chatId) {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+    let initialLoad = true;
+    lastDate = null;
+    chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
+      .orderBy('time', 'asc')
+      .onSnapshot(snapshot => {
+        if (initialLoad) {
+          container.innerHTML = '';
+          snapshot.forEach(doc => {
+            const msg = { id: doc.id, ...doc.data() };
+            appendMessage(msg, container, true);
+          });
+          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+          initialLoad = false;
+        } else {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const msg = { id: change.doc.id, ...change.doc.data() };
+              appendMessage(msg, container, false);
+              container.scrollTop = container.scrollHeight;
+              // Показываем уведомление, если вкладка не активна или чат не открыт
+              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
+                showMessageNotification(msg);
+              }
+              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
+                unreadCount++;
+                updateUnreadBadge();
+              }
+            }
+          });
+        }
+      });
   }
 
   let unreadCount = 0;
@@ -1029,41 +1071,6 @@
     }
     unreadCount = count;
     updateUnreadBadge();
-  }
-
-  function listenMessages(chatId) {
-    const container = document.getElementById('messagesContainer');
-    if (!container) return;
-    let initialLoad = true;
-    lastDate = null;
-    chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
-      .orderBy('time', 'asc')
-      .onSnapshot(snapshot => {
-        if (initialLoad) {
-          container.innerHTML = '';
-          snapshot.forEach(doc => {
-            const msg = { id: doc.id, ...doc.data() };
-            appendMessage(msg, container, true);
-          });
-          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
-          initialLoad = false;
-        } else {
-          snapshot.docChanges().forEach(change => {
-            if (change.type === 'added') {
-              const msg = { id: change.doc.id, ...change.doc.data() };
-              appendMessage(msg, container, false);
-              container.scrollTop = container.scrollHeight;
-              if (msg.sender !== currentUser.id && document.hidden) {
-                showMessageNotification(msg);
-              }
-              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
-                unreadCount++;
-                updateUnreadBadge();
-              }
-            }
-          });
-        }
-      });
   }
 
   function appendMessage(msg, container, isInitial) {
@@ -1437,7 +1444,10 @@
     });
   }
 
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  // Запрос разрешения на уведомления при загрузке, если ещё не запрошено
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
