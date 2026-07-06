@@ -20,8 +20,7 @@
         safari_web_id: "web.onesignal.auto.09714a24-a3bb-414f-8109-d75a4f07e6fa",
         notifyButton: {
           enable: true,
-        },
-        path: "/sw.js"   // ← чтобы использовать твой сервис-воркер с importScripts
+        }
       });
     });
   </script>
@@ -269,7 +268,7 @@
   </div>
 </div>
 
-<!-- Баннер для iOS: предлагает установить PWA (виден только на iPhone/iPad) -->
+<!-- Баннер для iOS, чтобы предложить установить PWA -->
 <div id="pwaInstallBanner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#f2f2f7; padding:16px; text-align:center; border-top:1px solid #ccc; z-index:5000;">
   <p style="margin-bottom:8px; color:#1c1c1e;">Установите приложение, чтобы получать уведомления</p>
   <button id="pwaInstallBtn" class="ios-btn" style="width:auto; display:inline-block; padding:10px 24px;">Установить</button>
@@ -378,9 +377,7 @@
       if (userDoc.exists) {
         currentUser = { id: user.uid, ...userDoc.data(), photos: userDoc.data().photos || [] };
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
+        // Ручной запрос уведомлений убран, чтобы не мешать OneSignal
         showScreen(screens.main);
         activateTab('interesting');
         initialUnreadCount();
@@ -389,9 +386,7 @@
         const newUser = { phone, name: phone, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() };
         await db.collection('users').doc(user.uid).set(newUser);
         currentUser = { id: user.uid, ...newUser, lastSeen: new Date() };
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
+        // Ручной запрос уведомлений убран
         showScreen(screens.main);
         activateTab('interesting');
       }
@@ -568,7 +563,7 @@
       if (!text || !dt) return alert('Заполните поля');
       await db.collection('reminders').add({ userId: currentUser.id, text, dateTime: dt, notified: false });
       overlay.remove();
-      if (Notification.permission === 'default') Notification.requestPermission();
+      // Ручной запрос уведомлений убран
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   }
@@ -1533,9 +1528,7 @@
     });
   }
 
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
+  // Ручной запрос уведомлений убран — колокольчик OneSignal появится сам
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
   // === Баннер установки PWA для iOS ===
