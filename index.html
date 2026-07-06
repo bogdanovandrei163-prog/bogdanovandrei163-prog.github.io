@@ -10,24 +10,11 @@
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="manifest.json">
 
-  <!-- OneSignal Web Push -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "3d8cbc58-4d49-412c-8318-57ecb1baef4a",
-        safari_web_id: "web.onesignal.auto.09714a24-a3bb-414f-8109-d75a4f07e6fa",
-        notifyButton: {
-          enable: true,
-        }
-      });
-    });
-  </script>
-
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     body { background: #000; min-height: 100dvh; display: flex; justify-content: center; align-items: center; }
@@ -268,7 +255,7 @@
   </div>
 </div>
 
-<!-- Баннер для iOS, чтобы предложить установить PWA -->
+<!-- Баннер для iOS PWA -->
 <div id="pwaInstallBanner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#f2f2f7; padding:16px; text-align:center; border-top:1px solid #ccc; z-index:5000;">
   <p style="margin-bottom:8px; color:#1c1c1e;">Установите приложение, чтобы получать уведомления</p>
   <button id="pwaInstallBtn" class="ios-btn" style="width:auto; display:inline-block; padding:10px 24px;">Установить</button>
@@ -287,6 +274,7 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
+  const messaging = firebase.messaging();
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -295,6 +283,30 @@
   let unsubscribeReminders = null, unsubscribeTasks = null, unsubscribeChats = null;
   let chatUnsubscribe = null, currentChatId = null, currentPartnerId = null;
   let lastDate = null;
+
+  // FCM: запрос разрешения и сохранение токена
+  async function initFCM() {
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        console.log('Разрешение на уведомления не дано');
+        return;
+      }
+
+      const token = await messaging.getToken({
+        vapidKey: 'BJeEEgZfqUsCQevR6GKUMZbF2wnryEHYai2JYAUHd9_ps11deb4NvlVR9I3I09Lpo3xslcbslm85UHNxpapEgP0'
+      });
+
+      if (token && currentUser) {
+        await db.collection('users').doc(currentUser.id).update({
+          fcmToken: token
+        });
+        console.log('FCM токен сохранён');
+      }
+    } catch (err) {
+      console.error('Ошибка FCM:', err);
+    }
+  }
 
   const sidebar = document.getElementById('sidebar');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -377,18 +389,20 @@
       if (userDoc.exists) {
         currentUser = { id: user.uid, ...userDoc.data(), photos: userDoc.data().photos || [] };
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
-        // Ручной запрос уведомлений убран, чтобы не мешать OneSignal
         showScreen(screens.main);
         activateTab('interesting');
         initialUnreadCount();
+
+        initFCM(); // запросим разрешение и сохраним токен
       } else {
         const phone = user.email.split('@')[0];
         const newUser = { phone, name: phone, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() };
         await db.collection('users').doc(user.uid).set(newUser);
         currentUser = { id: user.uid, ...newUser, lastSeen: new Date() };
-        // Ручной запрос уведомлений убран
         showScreen(screens.main);
         activateTab('interesting');
+
+        initFCM();
       }
     } else {
       firebaseUser = null; currentUser = null;
@@ -563,7 +577,6 @@
       if (!text || !dt) return alert('Заполните поля');
       await db.collection('reminders').add({ userId: currentUser.id, text, dateTime: dt, notified: false });
       overlay.remove();
-      // Ручной запрос уведомлений убран
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   }
@@ -1528,8 +1541,7 @@
     });
   }
 
-  // Ручной запрос уведомлений убран — колокольчик OneSignal появится сам
-  // Регистрируем сервис-воркер для корня
+  // Регистрируем сервис-воркер (для кеширования, FCM не требует отдельного sw)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
