@@ -1,3 +1,7 @@
+// === OneSignal Service Worker (добавлено для push-уведомлений) ===
+importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
+// === Твой собственный код кеширования (без изменений) ===
 const CACHE_NAME = 'slip-v3'; // Увеличьте версию, чтобы сбросить старый кэш
 
 // Файлы, которые хотим закэшировать при установке
