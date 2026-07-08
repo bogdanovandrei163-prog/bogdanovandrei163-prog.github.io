@@ -43,7 +43,7 @@
     .section-header {
       padding: 16px; background: #ffffff; border-bottom: 0.5px solid rgba(0,0,0,0.1);
       box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-shrink: 0; display: flex;
-      align-items: center; gap: 12px; border-radius: 16px; margin: 32px 8px 0;
+      align-items: center; gap: 12px; border-radius: 16px; margin: 8px 8px 0;
     }
     .burger-btn { background: none; border: none; font-size: 28px; cursor: pointer; padding: 4px; width: auto; color: #007aff; }
     .section-body { flex: 1; overflow-y: auto; padding: 0 16px 12px; }
@@ -52,12 +52,11 @@
     .ios-btn { background: #007aff; color: white; border: none; border-radius: 12px; padding: 14px; font-size: 17px; font-weight: 600; width: 100%; margin-top: 6px; cursor: pointer; transition: opacity 0.2s; }
     .ios-btn:active { opacity: 0.7; }
     .ios-btn.secondary { background: #e9e9ef; color: #007aff; }
-    .ios-btn.danger { background: #ff3b30; color: white; }
-    .card { background: #fff; border-radius: 16px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .reminder-item, .chat-item, .task-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 0.5px solid #e5e5ea; }
+    .card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .reminder-item, .chat-item, .task-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 0.5px solid #e5e5ea; }
     .reminder-item:last-child, .chat-item:last-child, .task-item:last-child { border-bottom: none; }
     .avatar { width: 48px; height: 48px; border-radius: 12px; background: #c7c7cc; background-size: cover; background-position: center; margin-right: 12px; }
-    .chat-item .avatar { margin-left: 0; }
+    .chat-item .avatar { margin-left: 8px; }
     .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
     .badge { background: #ff3b30; color: #fff; border-radius: 20px; padding: 2px 8px; font-size: 12px; margin-left: 6px; }
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; align-items: flex-end; justify-content: center; z-index: 1000; }
@@ -65,9 +64,10 @@
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     video { width: 100%; max-width: 200px; border-radius: 20px; background: #000; margin: 10px 0; }
 
+    /* ЧАТ – жёсткая фиксация */
     #tabContent { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
     .chat-screen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; background: #fff; }
-    .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; flex-shrink: 0; margin-top: 24px; }
+    .chat-header { padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; display: flex; align-items: center; gap: 10px; background: #f9f9f9; flex-shrink: 0; }
     .chat-header .user-info { flex: 1; }
     .chat-header .user-status { font-size: 12px; color: #8e8e93; margin-top: 2px; }
     .messages-container { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 0; -webkit-overflow-scrolling: touch; background: #fff; }
@@ -95,127 +95,20 @@
       min-height: 40px; max-height: 120px; overflow-y: auto; line-height: 1.4;
     }
 
-    .chat-tools {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 8px 8px;
-    }
-    .chat-tools .ios-input {
-      flex: 1;
-      margin-bottom: 0;
-    }
-    .add-chat-btn {
-      background: #007aff;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      width: 44px;
-      height: 44px;
-      font-size: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    .slip-label {
-      text-align: center;
-      color: #20b2aa;
-      font-size: 11px;
-      margin: 2px 0 4px;
-      letter-spacing: 1px;
-    }
-    .chat-item .chat-info {
-      flex: 1;
-      padding-right: 8px;
-      min-width: 0;
-    }
-    .chat-item .name-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 2px;
-    }
-    .chat-item .name-row strong {
-      font-size: 17px;
-      line-height: 1.2;
-    }
-    .online-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .online-dot.online { background: #34c759; }
-    .online-dot.offline { background: #ff3b30; }
-    .chat-item .last-msg {
-      font-size: 13px;
-      color: #6e6e73;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .chat-item .right-col {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      justify-content: center;
-      gap: 4px;
-      padding-left: 8px;
-      flex-shrink: 0;
-      max-width: 50px;
-    }
-    .chat-time {
-      font-size: 12px;
-      color: #8e8e93;
-      white-space: nowrap;
-    }
-    .msg-status-dots {
-      display: flex;
-      gap: 2px;
-    }
-    .msg-status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #c7c7cc;
-    }
-    .msg-status-dot.sent {
-      background: #c7c7cc;
-    }
-    .msg-status-dot.delivered {
-      background: #c7c7cc;
-    }
-    .msg-status-dot.read {
-      background: #007aff;
-    }
-    .create-chat-avatar {
-      width: 70px;
-      height: 70px;
-      border-radius: 16px;
-      background: #c7c7cc;
-      background-size: cover;
-      background-position: center;
-      margin: 0 auto 10px;
-    }
-    .photo-upload-btn {
-      display: block;
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 12px;
-      background: #e9e9ef;
-      border: none;
-      border-radius: 12px;
-      color: #007aff;
-      font-size: 15px;
-      text-align: center;
-      cursor: pointer;
-    }
+    /* Остальные вспомогательные стили (галерея, индикатор) */
+    .user-profile-card { text-align: center; }
+    .large-avatar { width: 100px; height: 100px; border-radius: 20px; background-size: cover; background-position: center; margin: 0 auto 16px; }
+    .online-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #34c759; margin-right: 4px; }
+    .offline-indicator { background: #8e8e93; }
+    .gallery-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; align-items: center; justify-content: center; }
+    .gallery-image { max-width: 90%; max-height: 80%; border-radius: 20px; object-fit: contain; }
+    .gallery-controls { position: absolute; bottom: 20px; display: flex; gap: 20px; }
+    .gallery-controls button { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; }
   </style>
 </head>
 <body>
 <div class="app-container" id="appContainer">
+  <!-- Сайдбар и оверлей -->
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <div class="sidebar" id="sidebar">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -229,13 +122,14 @@
     <div class="sidebar-item" data-tab="settings"><span>👤</span> Настройки</div>
   </div>
 
+  <!-- Экраны входа/регистрации -->
   <div class="screen active" id="loginScreen">
     <h2 style="font-size:28px; font-weight:700; margin:40px 0 8px;">Вход</h2>
     <input class="ios-input" type="tel" id="loginPhone" placeholder="+71234567890">
     <input class="ios-input" type="password" id="loginPassword" placeholder="Пароль">
     <button class="ios-btn" id="loginBtn">Войти</button>
     <p style="margin-top:16px; text-align:center;"><a href="#" id="goToRegister" style="color:#007aff; text-decoration:none;">Зарегистрироваться</a></p>
-    <p style="margin-top:8px; text-align:center;"><a href="#" id="forgotPasswordLink" style="color:#8e8e93; text-decoration:none;">Забыли пароль?</a></p>
+    <p style="color:#8e8e93; font-size:13px; text-align:center; margin-top:8px;">Введите ваш номер и пароль</p>
   </div>
   <div class="screen" id="registerScreen">
     <button class="ios-btn secondary" style="width:auto; margin-bottom:20px;" id="backToLogin">← Назад</button>
@@ -247,6 +141,7 @@
     <button class="ios-btn" id="registerBtn">Зарегистрироваться</button>
   </div>
 
+  <!-- Главный экран -->
   <div class="screen" id="mainScreen">
     <div id="tabContent"></div>
   </div>
@@ -274,6 +169,7 @@
   let chatUnsubscribe = null, currentChatId = null, currentPartnerId = null;
   let lastDate = null;
 
+  // Сайдбар
   const sidebar = document.getElementById('sidebar');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
   function openSidebar() { sidebar.classList.add('open'); sidebarOverlay.classList.add('show'); }
@@ -320,26 +216,6 @@
     return main ? main.url : photos[0].url;
   }
 
-  function formatChatTime(date) {
-    if (!date) return '';
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const msgDateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = Math.floor((todayStart - msgDateStart) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (diffDays > 0 && diffDays <= 7) {
-      const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-      return days[date.getDay()];
-    }
-    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-  }
-
-  function isUserOnline(lastSeen) {
-    if (!lastSeen) return false;
-    const now = new Date();
-    return (now - lastSeen) < 5 * 60 * 1000;
-  }
-
   setInterval(() => {
     if (firebaseUser) db.collection('users').doc(firebaseUser.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
   }, 300000);
@@ -355,9 +231,6 @@
       if (userDoc.exists) {
         currentUser = { id: user.uid, ...userDoc.data(), photos: userDoc.data().photos || [] };
         await db.collection('users').doc(user.uid).update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
         showScreen(screens.main);
         activateTab('interesting');
         initialUnreadCount();
@@ -366,9 +239,6 @@
         const newUser = { phone, name: phone, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() };
         await db.collection('users').doc(user.uid).set(newUser);
         currentUser = { id: user.uid, ...newUser, lastSeen: new Date() };
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
         showScreen(screens.main);
         activateTab('interesting');
       }
@@ -380,54 +250,17 @@
 
   $('#goToRegister').addEventListener('click', e => { e.preventDefault(); showScreen(screens.register); });
   $('#backToLogin').addEventListener('click', e => { e.preventDefault(); showScreen(screens.login); });
-
-  $('#forgotPasswordLink').addEventListener('click', (e) => {
-    e.preventDefault();
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal-sheet">
-        <h3 style="margin-bottom:16px;">Восстановление пароля</h3>
-        <input class="ios-input" id="resetPhone" type="tel" placeholder="Номер телефона">
-        <button class="ios-btn" id="sendResetBtn">Отправить ссылку</button>
-        <button class="ios-btn secondary" id="closeResetModal">Отмена</button>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#closeResetModal').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#sendResetBtn').addEventListener('click', async () => {
-      const phone = overlay.querySelector('#resetPhone').value.trim();
-      if (!phone) return alert('Введите номер телефона');
-      try {
-        await auth.sendPasswordResetEmail(phoneToEmail(phone));
-        alert('Ссылка для сброса пароля отправлена на указанный номер.');
-        overlay.remove();
-      } catch (error) {
-        alert('Ошибка: ' + error.message);
-      }
-    });
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-  });
-
   $('#loginBtn').addEventListener('click', async () => {
     const phone = $('#loginPhone').value.trim(), pwd = $('#loginPassword').value.trim();
     if (!phone || !pwd) return alert('Заполните все поля');
     try { await auth.signInWithEmailAndPassword(phoneToEmail(phone), pwd); } catch (e) { alert('Ошибка входа: ' + e.message); }
   });
-
   $('#registerBtn').addEventListener('click', async () => {
     const phone = $('#regPhone').value.trim(), pwd = $('#regPassword').value.trim(),
           pwd2 = $('#regPasswordConfirm').value.trim(), name = $('#regName').value.trim();
     if (!phone || !pwd || !name) return alert('Заполните все поля');
     if (pwd !== pwd2) return alert('Пароли не совпадают');
     if (pwd.length < 6) return alert('Пароль минимум 6 символов');
-
-    const existing = await db.collection('users').where('phone', '==', phone).get();
-    if (!existing.empty) {
-      return alert('Пользователь с таким номером телефона уже зарегистрирован.');
-    }
-
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), pwd);
       await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
@@ -455,28 +288,13 @@
 
     const titles = { interesting: 'Интересное', reminders: 'Напоминания', tasks: 'Задачи', chats: 'Чаты', settings: 'Настройки' };
     const title = titles[tab] || 'Раздел';
-
-    if (tab === 'chats') {
-      container.innerHTML = `
-        <div class="section-header">
-          <button class="burger-btn open-sidebar-btn">☰</button>
-          <h2>${title}</h2>
-        </div>
-        <div class="chat-tools">
-          <input class="ios-input" id="searchUserInput" placeholder="🔍 Поиск">
-          <button class="add-chat-btn" id="addChatBtn">+</button>
-        </div>
-        <div class="section-body" id="sectionBody"></div>
-      `;
-    } else {
-      container.innerHTML = `
-        <div class="section-header">
-          <button class="burger-btn open-sidebar-btn">☰</button>
-          <h2>${title}</h2>
-        </div>
-        <div class="section-body" id="sectionBody"></div>
-      `;
-    }
+    container.innerHTML = `
+      <div class="section-header">
+        <button class="burger-btn open-sidebar-btn">☰</button>
+        <h2>${title}</h2>
+      </div>
+      <div class="section-body" id="sectionBody"></div>
+    `;
     container.querySelector('.open-sidebar-btn').addEventListener('click', openSidebar);
     const body = document.getElementById('sectionBody');
 
@@ -637,66 +455,55 @@
   // ========== ЧАТЫ ==========
   function renderChats(body) {
     body.innerHTML = `
-      <div id="searchResults" class="search-results" style="display:none;"></div>
-      <div class="slip-label">Slip</div>
+      <div style="margin-bottom:12px;">
+        <input class="ios-input" id="searchUserInput" placeholder="🔍 Поиск">
+        <div id="searchResults" class="search-results" style="display:none;"></div>
+      </div>
       <div id="chatsList"></div>
     `;
-
     const searchInput = $('#searchUserInput');
     const searchResults = $('#searchResults');
     let searchTimeout;
-
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        const query = searchInput.value.trim();
-        if (query.length < 1) { searchResults.style.display = 'none'; return; }
-        searchTimeout = setTimeout(async () => {
-          const usersSnap = await db.collection('users').get();
-          const results = [];
-          usersSnap.forEach(doc => {
-            if (doc.id === currentUser.id) return;
-            const u = doc.data();
-            const full = (u.name + ' ' + (u.hidePhone ? '' : u.phone) + ' ' + (u.nick || '')).toLowerCase();
-            if (full.includes(query.toLowerCase())) results.push({ id: doc.id, ...u });
-          });
-          if (results.length === 0) {
-            searchResults.innerHTML = '<p style="padding:12px; color:#8e8e93;">Никого не найдено</p>';
-          } else {
-            searchResults.innerHTML = results.map(u => `
-              <div class="search-result-item" data-uid="${u.id}">
-                <div class="avatar" style="background-image:url(${getMainPhoto(u.photos)})"></div>
-                <div style="flex:1">
-                  <strong>${u.name}</strong>
-                  <div style="font-size:13px; color:#6e6e73;">${u.hidePhone ? '' : u.phone} ${u.nick ? '@'+u.nick : ''}</div>
-                </div>
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const query = searchInput.value.trim();
+      if (query.length < 1) { searchResults.style.display = 'none'; return; }
+      searchTimeout = setTimeout(async () => {
+        const usersSnap = await db.collection('users').get();
+        const results = [];
+        usersSnap.forEach(doc => {
+          if (doc.id === currentUser.id) return;
+          const u = doc.data();
+          const full = (u.name + ' ' + (u.hidePhone ? '' : u.phone) + ' ' + (u.nick || '')).toLowerCase();
+          if (full.includes(query.toLowerCase())) results.push({ id: doc.id, ...u });
+        });
+        if (results.length === 0) {
+          searchResults.innerHTML = '<p style="padding:12px; color:#8e8e93;">Никого не найдено</p>';
+        } else {
+          searchResults.innerHTML = results.map(u => `
+            <div class="search-result-item" data-uid="${u.id}">
+              <div class="avatar" style="background-image:url(${getMainPhoto(u.photos)})"></div>
+              <div style="flex:1">
+                <strong>${u.name}</strong>
+                <div style="font-size:13px; color:#6e6e73;">${u.hidePhone ? '' : u.phone} ${u.nick ? '@'+u.nick : ''}</div>
               </div>
-            `).join('');
-            document.querySelectorAll('.search-result-item').forEach(el => {
-              el.addEventListener('click', async () => {
-                const targetId = el.dataset.uid;
-                await createOrOpenChat(targetId);
-                searchInput.value = '';
-                searchResults.style.display = 'none';
-              });
+            </div>
+          `).join('');
+          document.querySelectorAll('.search-result-item').forEach(el => {
+            el.addEventListener('click', async () => {
+              const targetId = el.dataset.uid;
+              await createOrOpenChat(targetId);
+              searchInput.value = '';
+              searchResults.style.display = 'none';
             });
-          }
-          searchResults.style.display = 'block';
-        }, 300);
-      });
-    }
-
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#searchUserInput') && !e.target.closest('#searchResults')) {
-        const sr = document.getElementById('searchResults');
-        if (sr) sr.style.display = 'none';
-      }
+          });
+        }
+        searchResults.style.display = 'block';
+      }, 300);
     });
-
-    const addBtn = document.getElementById('addChatBtn');
-    if (addBtn) {
-      addBtn.addEventListener('click', () => openNewChatModal());
-    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#searchUserInput') && !e.target.closest('#searchResults')) searchResults.style.display = 'none';
+    });
 
     const listEl = $('#chatsList');
     unsubscribeChats = db.collection('chats')
@@ -711,48 +518,17 @@
           listEl.innerHTML = '<p style="color:#8e8e93; text-align:center; margin-top:20px;">Нет чатов</p>';
           return;
         }
-        chats.sort((a, b) => {
-          const timeA = a.lastMessage?.time ? a.lastMessage.time.toDate().getTime() : 0;
-          const timeB = b.lastMessage?.time ? b.lastMessage.time.toDate().getTime() : 0;
-          return timeB - timeA;
-        });
         listEl.innerHTML = chats.map(c => {
           const otherId = c.participants.find(id => id !== currentUser.id);
           const otherUser = usersMap[otherId] || {};
           const mainPhoto = getMainPhoto(otherUser.photos);
           const lastMsg = c.lastMessage ? c.lastMessage.text : '';
-          const lastMsgTime = c.lastMessage?.time ? c.lastMessage.time.toDate() : null;
-          const timeDisplay = formatChatTime(lastMsgTime);
-          const lastMsgSender = c.lastMessage?.sender;
-          const lastMsgStatus = c.lastMessage?.status;
-
-          const lastSeen = otherUser.lastSeen ? otherUser.lastSeen.toDate() : null;
-          const online = isUserOnline(lastSeen);
-
-          let statusDotsHTML = '';
-          if (lastMsgSender === currentUser.id) {
-            if (lastMsgStatus === 'pending') {
-              statusDotsHTML = '<div class="msg-status-dots"><span class="msg-status-dot sent"></span></div>';
-            } else if (lastMsgStatus === 'sent' || lastMsgStatus === 'delivered') {
-              statusDotsHTML = '<div class="msg-status-dots"><span class="msg-status-dot sent"></span><span class="msg-status-dot sent"></span></div>';
-            } else if (lastMsgStatus === 'read') {
-              statusDotsHTML = '<div class="msg-status-dots"><span class="msg-status-dot read"></span><span class="msg-status-dot read"></span></div>';
-            }
-          }
-
           return `
-            <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer; padding: 10px 12px; display: flex; align-items: center;">
+            <div class="card chat-item" data-chat-id="${c.id}" style="cursor:pointer; padding-left: 0;">
               <div class="avatar" style="background-image:url(${mainPhoto})"></div>
-              <div class="chat-info">
-                <div class="name-row">
-                  <strong>${otherUser.name || 'Пользователь'}</strong>
-                  <span class="online-dot ${online ? 'online' : 'offline'}"></span>
-                </div>
-                <div class="last-msg">${lastMsg}</div>
-              </div>
-              <div class="right-col">
-                ${timeDisplay ? `<div class="chat-time">${timeDisplay}</div>` : ''}
-                ${statusDotsHTML}
+              <div style="flex:1">
+                <strong>${otherUser.name || 'Пользователь'}</strong>
+                <div style="font-size:13px; color:#6e6e73;">${lastMsg}</div>
               </div>
             </div>
           `;
@@ -763,87 +539,33 @@
       });
   }
 
-  async function openNewChatModal() {
+  async function openCreateGroupChatModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.display = 'flex';
-
-    const chatsSnap = await db.collection('chats')
-      .where('participants', 'array-contains', currentUser.id)
-      .get();
-
-    const knownUserIds = new Set();
-    for (const chatDoc of chatsSnap.docs) {
-      const messagesSnap = await chatDoc.ref.collection('messages')
-        .where('sender', '!=', currentUser.id)
-        .limit(1)
-        .get();
-      if (!messagesSnap.empty) {
-        const otherIds = chatDoc.data().participants.filter(id => id !== currentUser.id);
-        otherIds.forEach(id => knownUserIds.add(id));
-      }
-    }
-
-    const knownUsers = [];
-    if (knownUserIds.size > 0) {
-      const usersSnap = await db.collection('users').get();
-      usersSnap.forEach(doc => {
-        if (knownUserIds.has(doc.id)) {
-          knownUsers.push({ id: doc.id, ...doc.data() });
-        }
-      });
-    }
-
-    let chatPhotoData = null;
+    const usersSnap = await db.collection('users').get();
+    const otherUsers = [];
+    usersSnap.forEach(doc => { if (doc.id !== currentUser.id) otherUsers.push({ id: doc.id, ...doc.data() }); });
     overlay.innerHTML = `
       <div class="modal-sheet">
-        <h3>Создать чат</h3>
-        <input class="ios-input" id="newChatName" placeholder="Название чата">
-        <div class="create-chat-avatar" id="chatAvatarPreview" style="background-image:url('')"></div>
-        <button class="photo-upload-btn" id="uploadChatPhotoBtn">Выбрать фото</button>
-        <p>Участники (только те, с кем уже есть переписка):</p>
-        <div id="newChatParticipants" style="max-height:180px; overflow-y:auto; margin-bottom:12px;">
-          ${knownUsers.length > 0 ? knownUsers.map(u => `
-            <label style="display:flex; align-items:center; gap:8px; padding:6px 0;">
-              <input type="checkbox" value="${u.id}">
-              <div class="avatar" style="width:36px;height:36px;background-image:url(${getMainPhoto(u.photos)})"></div>
-              <span>${u.name} ${u.phone ? '('+u.phone+')' : ''}</span>
-            </label>
-          `).join('') : '<p style="color:#8e8e93;">Нет доступных собеседников</p>'}
+        <h3>Новый групповой чат</h3>
+        <input class="ios-input" id="groupNameInput" placeholder="Название группы">
+        <p>Выберите участников:</p>
+        <div id="groupParticipantsSelect" style="max-height:150px; overflow-y:auto; margin-bottom:12px;">
+          ${otherUsers.map(u => `<label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" value="${u.id}"> ${u.name} (${u.phone})</label>`).join('<br>')}
+          ${otherUsers.length===0 ? '<p style="color:#8e8e93;">Нет других пользователей.</p>' : ''}
         </div>
-        <button class="ios-btn" id="saveNewChatBtn">Создать</button>
-        <button class="ios-btn secondary" id="closeNewChatModal">Отмена</button>
+        <button class="ios-btn" id="saveGroupChatBtn">Создать</button>
+        <button class="ios-btn secondary" id="closeGroupChatModal">Отмена</button>
       </div>
     `;
     document.body.appendChild(overlay);
-
-    const avatarPreview = overlay.querySelector('#chatAvatarPreview');
-    overlay.querySelector('#uploadChatPhotoBtn').addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const compressed = await compressImage(file);
-          chatPhotoData = compressed;
-          avatarPreview.style.backgroundImage = `url(${compressed})`;
-        }
-      };
-      input.click();
-    });
-
-    overlay.querySelector('#closeNewChatModal').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#saveNewChatBtn').addEventListener('click', async () => {
-      const groupName = overlay.querySelector('#newChatName').value.trim() || 'Группа';
-      const checks = [...overlay.querySelectorAll('#newChatParticipants input:checked')].map(cb => cb.value);
-      const participants = [currentUser.id, ...checks];
-      await db.collection('chats').add({
-        participants,
-        isGroup: checks.length > 0,
-        groupName,
-        photoUrl: chatPhotoData || ''
-      });
+    overlay.querySelector('#closeGroupChatModal').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#saveGroupChatBtn').addEventListener('click', async () => {
+      const groupName = overlay.querySelector('#groupNameInput').value.trim() || 'Группа';
+      const checks = [...overlay.querySelectorAll('#groupParticipantsSelect input:checked')].map(cb => cb.value);
+      if (checks.length === 0) return alert('Выберите хотя бы одного участника');
+      await db.collection('chats').add({ participants: [currentUser.id, ...checks], isGroup: true, groupName });
       overlay.remove();
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
@@ -868,6 +590,7 @@
     currentChatId = chatId;
     const container = $('#tabContent');
     container.classList.add('chat-open');
+    // Абсолютное позиционирование гарантирует, что чат займёт весь tabContent и не будет скролла всей страницы
     container.innerHTML = `
       <div class="chat-screen" id="chatScreen">
         <div class="chat-header" id="chatHeader">
@@ -1047,41 +770,6 @@
     }
   }
 
-  function listenMessages(chatId) {
-    const container = document.getElementById('messagesContainer');
-    if (!container) return;
-    let initialLoad = true;
-    lastDate = null;
-    chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
-      .orderBy('time', 'asc')
-      .onSnapshot(snapshot => {
-        if (initialLoad) {
-          container.innerHTML = '';
-          snapshot.forEach(doc => {
-            const msg = { id: doc.id, ...doc.data() };
-            appendMessage(msg, container, true);
-          });
-          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
-          initialLoad = false;
-        } else {
-          snapshot.docChanges().forEach(change => {
-            if (change.type === 'added') {
-              const msg = { id: change.doc.id, ...change.doc.data() };
-              appendMessage(msg, container, false);
-              container.scrollTop = container.scrollHeight;
-              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
-                showMessageNotification(msg);
-              }
-              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
-                unreadCount++;
-                updateUnreadBadge();
-              }
-            }
-          });
-        }
-      });
-  }
-
   let unreadCount = 0;
   const unreadBadge = document.getElementById('unreadBadge');
   function updateUnreadBadge() {
@@ -1108,6 +796,41 @@
     }
     unreadCount = count;
     updateUnreadBadge();
+  }
+
+  function listenMessages(chatId) {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+    let initialLoad = true;
+    lastDate = null;
+    chatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
+      .orderBy('time', 'asc')
+      .onSnapshot(snapshot => {
+        if (initialLoad) {
+          container.innerHTML = '';
+          snapshot.forEach(doc => {
+            const msg = { id: doc.id, ...doc.data() };
+            appendMessage(msg, container, true);
+          });
+          setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+          initialLoad = false;
+        } else {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const msg = { id: change.doc.id, ...change.doc.data() };
+              appendMessage(msg, container, false);
+              container.scrollTop = container.scrollHeight;
+              if (msg.sender !== currentUser.id && document.hidden) {
+                showMessageNotification(msg);
+              }
+              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
+                unreadCount++;
+                updateUnreadBadge();
+              }
+            }
+          });
+        }
+      });
   }
 
   function appendMessage(msg, container, isInitial) {
@@ -1285,11 +1008,6 @@
     const text = textarea.value.trim();
     const replyTo = textarea.dataset.replyTo || null;
     if (type === 'text' && !text) return;
-
-    await db.collection('chats').doc(currentChatId).update({
-      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'pending' }
-    });
-
     const msgData = {
       sender: currentUser.id,
       senderName: currentUser.name,
@@ -1303,7 +1021,7 @@
     }
     await db.collection('chats').doc(currentChatId).collection('messages').add(msgData);
     await db.collection('chats').doc(currentChatId).update({
-      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'sent' }
+      lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date() }
     });
     textarea.value = '';
     textarea.style.height = 'auto';
@@ -1325,15 +1043,6 @@
     const batch = db.batch();
     msgs.forEach(doc => batch.update(doc.ref, { status: 'read' }));
     await batch.commit();
-
-    const chatDoc = await db.collection('chats').doc(chatId).get();
-    const chatData = chatDoc.data();
-    if (chatData.lastMessage && chatData.lastMessage.sender !== currentUser.id) {
-      await db.collection('chats').doc(chatId).update({
-        'lastMessage.status': 'read'
-      });
-    }
-
     unreadCount -= msgs.size;
     if (unreadCount < 0) unreadCount = 0;
     updateUnreadBadge();
@@ -1371,41 +1080,12 @@
         <p><strong>Никнейм:</strong> ${u.nick || 'не указан'}</p>
       </div>
       <button class="ios-btn" id="editProfileBtn">Редактировать</button>
-      <button class="ios-btn danger" id="deleteAccountBtn">Удалить аккаунт</button>
       <button class="ios-btn secondary" id="logoutBtn" style="margin-top:8px;">Выйти</button>
     `;
     const avatarEl = document.getElementById('profileAvatar');
     avatarEl.addEventListener('click', () => { if (u.photos?.length > 0) openGallery(u.photos.map(p => p.url)); });
     $('#editProfileBtn').addEventListener('click', openEditProfile);
     $('#logoutBtn').addEventListener('click', () => auth.signOut());
-
-    $('#deleteAccountBtn').addEventListener('click', () => {
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay';
-      overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div class="modal-sheet">
-          <h3 style="margin-bottom:16px;">Удаление аккаунта</h3>
-          <p style="margin-bottom:16px; color:#ff3b30;">Внимание! Это действие нельзя отменить. Все ваши данные будут удалены.</p>
-          <button class="ios-btn danger" id="confirmDeleteBtn">Подтвердить удаление</button>
-          <button class="ios-btn secondary" id="closeDeleteModal">Отмена</button>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      overlay.querySelector('#closeDeleteModal').addEventListener('click', () => overlay.remove());
-      overlay.querySelector('#confirmDeleteBtn').addEventListener('click', async () => {
-        try {
-          await db.collection('users').doc(currentUser.id).delete();
-          await firebaseUser.delete();
-          overlay.remove();
-          alert('Аккаунт успешно удален.');
-          auth.signOut();
-        } catch (error) {
-          alert('Ошибка при удалении аккаунта: ' + error.message);
-        }
-      });
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    });
   }
 
   function openEditProfile() {
@@ -1510,9 +1190,7 @@
     });
   }
 
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
