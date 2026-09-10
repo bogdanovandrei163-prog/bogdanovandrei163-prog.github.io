@@ -430,6 +430,48 @@
   const auth = firebase.auth();
   const db = firebase.firestore();
 
+  // ========== УПРАВЛЕНИЕ СЕССИЕЙ (7 ДНЕЙ НЕАКТИВНОСТИ) ==========
+  const SESSION_KEY = 'slip_last_active';
+  const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 дней в миллисекундах
+
+  let sessionExpired = false;
+
+  // Проверяем сессию при запуске приложения
+  function checkSession() {
+    const now = Date.now();
+    const lastActive = localStorage.getItem(SESSION_KEY);
+    if (lastActive) {
+      const elapsed = now - parseInt(lastActive, 10);
+      if (elapsed > SESSION_TTL) {
+        console.log('Сессия истекла: прошло', Math.floor(elapsed / (1000 * 60 * 60 * 24)), 'дней');
+        sessionExpired = true;
+        localStorage.removeItem(SESSION_KEY);
+        return false;
+      }
+    }
+    // Обновляем метку текущим временем
+    localStorage.setItem(SESSION_KEY, String(now));
+    return true;
+  }
+
+  // Обновляем метку активности
+  function touchSession() {
+    localStorage.setItem(SESSION_KEY, String(Date.now()));
+  }
+
+  // Проверяем сразу при загрузке
+  checkSession();
+
+  // Обновляем метку при возвращении в приложение (из фона / другой вкладки)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) touchSession();
+  });
+
+  // Обновляем метку каждые 30 минут, пока приложение открыто
+  setInterval(() => {
+    if (document.visibilityState === 'visible') touchSession();
+  }, 30 * 60 * 1000);
+
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -512,8 +554,21 @@
   function showScreen(s) { Object.values(screens).forEach(x => x.classList.remove('active')); s.classList.add('active'); }
   function phoneToEmail(phone) { return phone.replace(/\s+/g, '') + '@slip.app'; }
 
-  // ОБРАБОТЧИК АВТОРИЗАЦИИ – без автоматической регистрации Pushwoosh
+  // ОБРАБОТЧИК АВТОРИЗАЦИИ – с проверкой истечения сессии
   auth.onAuthStateChanged(async (user) => {
+    // Если сессия истекла — принудительно выходим
+    if (user && sessionExpired) {
+      sessionExpired = false;
+      console.log('Принудительный выход: сессия истекла');
+      try {
+        await auth.signOut();
+      } catch (err) {
+        console.error('Ошибка signOut:', err);
+      }
+      alert('Сессия истекла (прошло более 7 дней). Пожалуйста, войдите заново.');
+      return;
+    }
+
     if (user) {
       firebaseUser = user;
       const userDoc = await db.collection('users').doc(user.uid).get();
@@ -572,7 +627,11 @@
   $('#loginBtn').addEventListener('click', async () => {
     const phone = $('#loginPhone').value.trim(), pwd = $('#loginPassword').value.trim();
     if (!phone || !pwd) return alert('Заполните все поля');
-    try { await auth.signInWithEmailAndPassword(phoneToEmail(phone), pwd); } catch (e) { alert('Ошибка входа: ' + e.message); }
+    try {
+      await auth.signInWithEmailAndPassword(phoneToEmail(phone), pwd);
+      // При успешном входе обновляем метку активности
+      touchSession();
+    } catch (e) { alert('Ошибка входа: ' + e.message); }
   });
 
   $('#registerBtn').addEventListener('click', async () => {
@@ -590,6 +649,7 @@
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), pwd);
       await db.collection('users').doc(cred.user.uid).set({ phone, name, age: '', city: '', nick: '', birthdate: '', hidePhone: false, hideBirthdate: false, photos: [], lastSeen: firebase.firestore.FieldValue.serverTimestamp() });
+      touchSession();
     } catch (e) { alert('Ошибка регистрации: ' + e.message); }
   });
 
@@ -1498,7 +1558,7 @@
     updateUnreadBadge();
   }
 
-  // ========== ПРОФИЛЬ (обновлён) ==========
+  // ========== ПРОФИЛЬ ==========
   function renderProfile(body) {
     if (!currentUser) return;
     const u = currentUser;
@@ -1551,7 +1611,6 @@
     const toggle = document.getElementById('notificationsToggle');
     const statusText = document.getElementById('notifStatusText');
 
-    // Проверяем реальное состояние подписки и синхронизируем ползунок
     (async () => {
       let isSubscribed = false;
       try {
@@ -1573,13 +1632,10 @@
 
     if (toggle) {
       toggle.addEventListener('change', async (e) => {
-        // Показываем состояние "идёт обработка"
         toggle.disabled = true;
         if (statusText) statusText.textContent = 'Обработка...';
 
         if (e.target.checked) {
-          // ===== ВКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ =====
-          // 1. Разрешение браузера
           let permission = Notification.permission;
           if (permission === 'default') {
             permission = await Notification.requestPermission();
@@ -1592,7 +1648,6 @@
             return;
           }
 
-          // 2. Подписка в OneSignal
           try {
             if (window.OneSignal) {
               await OneSignal.Notifications.requestPermission();
@@ -1603,7 +1658,6 @@
             console.warn('OneSignal ошибка подписки:', err);
           }
 
-          // 3. Подписка в Pushwoosh
           let hwid = null;
           if (typeof registerPushwoosh === 'function') {
             hwid = await registerPushwoosh();
@@ -1613,7 +1667,6 @@
             currentUser.pushwooshHwid = hwid;
             if (statusText) statusText.textContent = 'Уведомления включены';
           } else {
-            // Pushwoosh мог не сработать, но OneSignal мог сработать
             if (window.OneSignal && OneSignal.User.PushSubscription.optedIn) {
               if (statusText) statusText.textContent = 'Уведомления включены (OneSignal)';
             } else {
@@ -1624,7 +1677,6 @@
           }
           toggle.disabled = false;
         } else {
-          // ===== ВЫКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ =====
           try {
             if (window.OneSignal) {
               await OneSignal.User.PushSubscription.optOut();
@@ -1685,9 +1737,6 @@
   function openEditProfile() {
     // ... остальной код без изменений
   }
-
-  // ========== ИНИЦИАЛИЗАЦИЯ (без автоматического запроса уведомлений) ==========
-  // Удаляем старый блок if ('Notification' in window ...) – он больше не нужен
 </script>
 </body>
 </html>
