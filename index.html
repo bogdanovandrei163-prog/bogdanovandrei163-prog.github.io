@@ -114,15 +114,15 @@
 
   <!-- OneSignal Web SDK v16 -->
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script>
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
-  OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: "096117d5-73c4-4a75-84ac-abf9318b1842",
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "096117d5-73c4-4a75-84ac-abf9318b1842",
+      });
     });
-  });
-</script>
-  
+  </script>
+
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1532,9 +1532,12 @@
 
       <!-- Переключатель уведомлений -->
       <div class="card" style="display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-size:17px;">🔔 Уведомления</span>
+        <div>
+          <div style="font-size:17px;">🔔 Уведомления</div>
+          <div id="notifStatusText" style="font-size:12px; color:#8e8e93; margin-top:2px;">Проверка...</div>
+        </div>
         <label class="ios-switch">
-          <input type="checkbox" id="notificationsToggle" ${u.pushwooshHwid ? 'checked' : ''}>
+          <input type="checkbox" id="notificationsToggle">
           <span class="slider"></span>
         </label>
       </div>
@@ -1544,35 +1547,103 @@
       <button class="ios-btn secondary" id="logoutBtn" style="margin-top:8px;">Выйти</button>
     `;
 
-    // Обработчик переключателя
+    // === ЛОГИКА ПОЛЗУНКА УВЕДОМЛЕНИЙ ===
     const toggle = document.getElementById('notificationsToggle');
+    const statusText = document.getElementById('notifStatusText');
+
+    // Проверяем реальное состояние подписки и синхронизируем ползунок
+    (async () => {
+      let isSubscribed = false;
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg) {
+            const sub = await reg.pushManager.getSubscription();
+            isSubscribed = !!sub;
+          }
+        }
+      } catch (err) {
+        console.warn('Не удалось проверить подписку:', err);
+      }
+      toggle.checked = isSubscribed;
+      if (statusText) {
+        statusText.textContent = isSubscribed ? 'Уведомления включены' : 'Уведомления выключены';
+      }
+    })();
+
     if (toggle) {
       toggle.addEventListener('change', async (e) => {
+        // Показываем состояние "идёт обработка"
+        toggle.disabled = true;
+        if (statusText) statusText.textContent = 'Обработка...';
+
         if (e.target.checked) {
-          // Включить уведомления
-          const permission = await Notification.requestPermission();
+          // ===== ВКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ =====
+          // 1. Разрешение браузера
+          let permission = Notification.permission;
+          if (permission === 'default') {
+            permission = await Notification.requestPermission();
+          }
           if (permission !== 'granted') {
-            alert('Необходимо разрешить уведомления в браузере.');
+            alert('Необходимо разрешить уведомления в настройках браузера.');
             e.target.checked = false;
+            if (statusText) statusText.textContent = 'Уведомления выключены';
+            toggle.disabled = false;
             return;
           }
+
+          // 2. Подписка в OneSignal
+          try {
+            if (window.OneSignal) {
+              await OneSignal.Notifications.requestPermission();
+              await OneSignal.User.PushSubscription.optIn();
+              console.log('OneSignal: подписка активирована');
+            }
+          } catch (err) {
+            console.warn('OneSignal ошибка подписки:', err);
+          }
+
+          // 3. Подписка в Pushwoosh
+          let hwid = null;
           if (typeof registerPushwoosh === 'function') {
-            const hwid = await registerPushwoosh();
-            if (hwid) {
-              await db.collection('users').doc(currentUser.id).update({ pushwooshHwid: hwid });
-              currentUser.pushwooshHwid = hwid;
+            hwid = await registerPushwoosh();
+          }
+          if (hwid) {
+            await db.collection('users').doc(currentUser.id).update({ pushwooshHwid: hwid });
+            currentUser.pushwooshHwid = hwid;
+            if (statusText) statusText.textContent = 'Уведомления включены';
+          } else {
+            // Pushwoosh мог не сработать, но OneSignal мог сработать
+            if (window.OneSignal && OneSignal.User.PushSubscription.optedIn) {
+              if (statusText) statusText.textContent = 'Уведомления включены (OneSignal)';
             } else {
               alert('Не удалось зарегистрировать устройство для уведомлений.');
               e.target.checked = false;
+              if (statusText) statusText.textContent = 'Уведомления выключены';
             }
           }
+          toggle.disabled = false;
         } else {
-          // Выключить уведомления
-          await unregisterPushwoosh();
+          // ===== ВЫКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ =====
+          try {
+            if (window.OneSignal) {
+              await OneSignal.User.PushSubscription.optOut();
+              console.log('OneSignal: подписка отключена');
+            }
+          } catch (err) {
+            console.warn('OneSignal ошибка отписки:', err);
+          }
+
+          if (typeof unregisterPushwoosh === 'function') {
+            await unregisterPushwoosh();
+          }
           await db.collection('users').doc(currentUser.id).update({
             pushwooshHwid: firebase.firestore.FieldValue.delete()
           });
           delete currentUser.pushwooshHwid;
+
+          if (statusText) statusText.textContent = 'Уведомления выключены';
+          toggle.disabled = false;
         }
       });
     }
