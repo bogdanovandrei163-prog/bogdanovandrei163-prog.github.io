@@ -1,13 +1,27 @@
 {
   "name": "Slip",
   "short_name": "Slip",
+  "description": "Slip — мессенджер и задачи",
+  "lang": "ru",
+  "dir": "ltr",
   "start_url": ".",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f2f2f7",
   "theme_color": "#007aff",
-  "icons": [{
-    "src": "icon.png",
-    "sizes": "512x512",
-    "type": "image/png"
-  }]
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
