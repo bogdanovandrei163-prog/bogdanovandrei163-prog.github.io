@@ -10,108 +10,6 @@
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="/manifest.json">
 
-  <!-- Pushwoosh Web SDK -->
-  <script src="https://cdn.pushwoosh.com/webpush/v3/pushwoosh-web-notifications.js" async></script>
-  <script>
-    window.PW = window.PW || {};
-    PW.apiUrl = 'https://cp.pushwoosh.com/json/1.3/';
-    PW.applicationCode = '65FF6-86A1D';
-
-    // Глобальная переменная для хранения регистрации сервис-воркера
-    let swRegistration = null;
-
-    // Функция регистрации в Pushwoosh и получения hwid
-    async function registerPushwoosh() {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.warn('Push-уведомления не поддерживаются');
-        return null;
-      }
-
-      try {
-        // 1. Регистрируем сервис-воркер
-        const registration = await navigator.serviceWorker.register('/pushwoosh-service-worker.js');
-        console.log('Service Worker зарегистрирован');
-        swRegistration = registration;
-
-        // 2. Проверяем наличие старой подписки и удаляем её
-        let subscription = await registration.pushManager.getSubscription();
-        if (subscription) {
-          console.log('Найдена старая подписка, удаляем...');
-          await subscription.unsubscribe();
-        }
-
-        // 3. Создаём новую подписку с VAPID-ключом
-        const vapidPublicKey = 'BJDAUNsr0vzYy4JRaFZwJFv_gzZJzdylmpPGjjZQDx33AuQaI4Xy3z2Kyp3aljvMTnzuujXjn3uhWt8CbbtcDkI';
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-        });
-
-        // 4. Отправляем подписку в Pushwoosh (push_token как строка!)
-        const response = await fetch('https://cp.pushwoosh.com/json/1.3/registerDevice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            request: {
-              application: PW.applicationCode,
-              push_token: JSON.stringify(subscription.toJSON()),
-              device_type: 11,
-              hwid: null
-            }
-          })
-        });
-        const data = await response.json();
-        if (data.status_code === 200) {
-          const hwid = data.response.hwid;
-          console.log('Pushwoosh зарегистрирован, hwid:', hwid);
-          return hwid;
-        } else {
-          console.error('Ошибка регистрации в Pushwoosh:', data);
-          return null;
-        }
-      } catch (error) {
-        console.error('Pushwoosh ошибка:', error);
-        return null;
-      }
-    }
-
-    // Отписка от push-уведомлений
-    async function unregisterPushwoosh() {
-      if (swRegistration) {
-        const subscription = await swRegistration.pushManager.getSubscription();
-        if (subscription) {
-          await subscription.unsubscribe();
-          console.log('Push-подписка отменена');
-        }
-        // Удаление из Pushwoosh произойдет автоматически, если hwid удалён из Firestore.
-      }
-    }
-
-    // Конвертация VAPID ключа
-    function urlBase64ToUint8Array(base64String) {
-      const padding = '='.repeat((4 - base64String.length % 4) % 4);
-      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-      const rawData = window.atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
-    }
-
-    // Обработка клика по уведомлению для открытия чата
-    window.addEventListener('pushwoosh:notificationclick', (event) => {
-      const payload = event.detail;
-      if (payload && payload.chatId) {
-        if (window.currentUser) {
-          window.openChatScreen(payload.chatId);
-        } else {
-          window.location.href = '/';
-        }
-      }
-    });
-  </script>
-
   <!-- OneSignal Web SDK v16 -->
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
@@ -119,6 +17,19 @@
     OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "096117d5-73c4-4a75-84ac-abf9318b1842",
+        allowLocalhostAsSecureOrigin: true,
+      });
+
+      // Обработка клика по push-уведомлению
+      OneSignal.Notifications.addEventListener('click', (event) => {
+        const data = event.notification.additionalData;
+        if (data && data.chatId) {
+          if (typeof window.openChatScreen === 'function' && window.currentUser) {
+            window.openChatScreen(data.chatId);
+          } else {
+            window.location.href = '/';
+          }
+        }
       });
     });
   </script>
@@ -209,122 +120,39 @@
       min-height: 40px; max-height: 120px; overflow-y: auto; line-height: 1.4;
     }
 
-    .chat-tools {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 8px 8px;
-    }
-    .chat-tools .ios-input {
-      flex: 1;
-      margin-bottom: 0;
-    }
+    .chat-tools { display: flex; align-items: center; gap: 8px; margin: 0 8px 8px; }
+    .chat-tools .ios-input { flex: 1; margin-bottom: 0; }
     .add-chat-btn {
-      background: #007aff;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      width: 44px;
-      height: 44px;
-      font-size: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      flex-shrink: 0;
+      background: #007aff; color: white; border: none; border-radius: 12px;
+      width: 44px; height: 44px; font-size: 24px; display: flex;
+      align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
     }
-    .slip-label {
-      text-align: center;
-      color: #20b2aa;
-      font-size: 11px;
-      margin: 2px 0 4px;
-      letter-spacing: 1px;
-    }
-    .chat-item .chat-info {
-      flex: 1;
-      padding-right: 8px;
-      min-width: 0;
-    }
-    .chat-item .name-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 2px;
-    }
-    .chat-item .name-row strong {
-      font-size: 17px;
-      line-height: 1.2;
-    }
-    .online-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-    }
+    .slip-label { text-align: center; color: #20b2aa; font-size: 11px; margin: 2px 0 4px; letter-spacing: 1px; }
+    .chat-item .chat-info { flex: 1; padding-right: 8px; min-width: 0; }
+    .chat-item .name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    .chat-item .name-row strong { font-size: 17px; line-height: 1.2; }
+    .online-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     .online-dot.online { background: #34c759; }
     .online-dot.offline { background: #ff3b30; }
-    .chat-item .last-msg {
-      font-size: 13px;
-      color: #6e6e73;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .chat-item .last-msg { font-size: 13px; color: #6e6e73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chat-item .right-col {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      justify-content: center;
-      gap: 4px;
-      padding-left: 8px;
-      flex-shrink: 0;
-      max-width: 50px;
+      display: flex; flex-direction: column; align-items: flex-end;
+      justify-content: center; gap: 4px; padding-left: 8px; flex-shrink: 0; max-width: 50px;
     }
-    .chat-time {
-      font-size: 12px;
-      color: #8e8e93;
-      white-space: nowrap;
-    }
-    .msg-status-dots {
-      display: flex;
-      gap: 2px;
-    }
-    .msg-status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #c7c7cc;
-    }
-    .msg-status-dot.sent {
-      background: #c7c7cc;
-    }
-    .msg-status-dot.delivered {
-      background: #c7c7cc;
-    }
-    .msg-status-dot.read {
-      background: #007aff;
-    }
+    .chat-time { font-size: 12px; color: #8e8e93; white-space: nowrap; }
+    .msg-status-dots { display: flex; gap: 2px; }
+    .msg-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #c7c7cc; }
+    .msg-status-dot.sent { background: #c7c7cc; }
+    .msg-status-dot.delivered { background: #c7c7cc; }
+    .msg-status-dot.read { background: #007aff; }
     .create-chat-avatar {
-      width: 70px;
-      height: 70px;
-      border-radius: 16px;
-      background: #c7c7cc;
-      background-size: cover;
-      background-position: center;
-      margin: 0 auto 10px;
+      width: 70px; height: 70px; border-radius: 16px; background: #c7c7cc;
+      background-size: cover; background-position: center; margin: 0 auto 10px;
     }
     .photo-upload-btn {
-      display: block;
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 12px;
-      background: #e9e9ef;
-      border: none;
-      border-radius: 12px;
-      color: #007aff;
-      font-size: 15px;
-      text-align: center;
-      cursor: pointer;
+      display: block; width: 100%; padding: 8px; margin-bottom: 12px;
+      background: #e9e9ef; border: none; border-radius: 12px;
+      color: #007aff; font-size: 15px; text-align: center; cursor: pointer;
     }
     .gallery-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -338,44 +166,19 @@
     .online-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #34c759; }
     .offline-indicator { background: #c7c7cc; }
 
-    /* Стили для iOS-переключателя */
-    .ios-switch {
-      position: relative;
-      display: inline-block;
-      width: 51px;
-      height: 31px;
-    }
-    .ios-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
+    .ios-switch { position: relative; display: inline-block; width: 51px; height: 31px; }
+    .ios-switch input { opacity: 0; width: 0; height: 0; }
     .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #e9e9ef;
-      transition: 0.2s;
-      border-radius: 31px;
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #e9e9ef; transition: 0.2s; border-radius: 31px;
     }
     .slider:before {
-      position: absolute;
-      content: "";
-      height: 27px;
-      width: 27px;
-      left: 2px;
-      bottom: 2px;
-      background-color: white;
-      transition: 0.2s;
-      border-radius: 50%;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      position: absolute; content: ""; height: 27px; width: 27px;
+      left: 2px; bottom: 2px; background-color: white; transition: 0.2s;
+      border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    input:checked + .slider {
-      background-color: #34c759;
-    }
-    input:checked + .slider:before {
-      transform: translateX(20px);
-    }
+    input:checked + .slider { background-color: #34c759; }
+    input:checked + .slider:before { transform: translateX(20px); }
   </style>
 </head>
 <body>
@@ -417,6 +220,14 @@
 </div>
 
 <script>
+  // ============================================================
+  // ⚠️ ВНИМАНИЕ: этот ключ в клиенте — только для теста!
+  // После проверки перенесите отправку push в Firebase Cloud Function
+  // и удалите ключ из этого файла.
+  // ============================================================
+  const ONESIGNAL_APP_ID = '096117d5-73c4-4a75-84ac-abf9318b1842';
+  const ONESIGNAL_REST_API_KEY = 'ВСТАВЬТЕ_СЮДА_ВАШ_REST_API_KEY';
+
   const firebaseConfig = {
     apiKey: "AIzaSyBRR33qbJhlWVjSykp2YLrk1dz8EWXiyI8",
     authDomain: "slip-54122.firebaseapp.com",
@@ -430,47 +241,29 @@
   const auth = firebase.auth();
   const db = firebase.firestore();
 
-  // ========== УПРАВЛЕНИЕ СЕССИЕЙ (7 ДНЕЙ НЕАКТИВНОСТИ) ==========
+  // ========== УПРАВЛЕНИЕ СЕССИЕЙ ==========
   const SESSION_KEY = 'slip_last_active';
-  const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 дней в миллисекундах
-
+  const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
   let sessionExpired = false;
 
-  // Проверяем сессию при запуске приложения
   function checkSession() {
     const now = Date.now();
     const lastActive = localStorage.getItem(SESSION_KEY);
     if (lastActive) {
       const elapsed = now - parseInt(lastActive, 10);
       if (elapsed > SESSION_TTL) {
-        console.log('Сессия истекла: прошло', Math.floor(elapsed / (1000 * 60 * 60 * 24)), 'дней');
         sessionExpired = true;
         localStorage.removeItem(SESSION_KEY);
         return false;
       }
     }
-    // Обновляем метку текущим временем
     localStorage.setItem(SESSION_KEY, String(now));
     return true;
   }
-
-  // Обновляем метку активности
-  function touchSession() {
-    localStorage.setItem(SESSION_KEY, String(Date.now()));
-  }
-
-  // Проверяем сразу при загрузке
+  function touchSession() { localStorage.setItem(SESSION_KEY, String(Date.now())); }
   checkSession();
-
-  // Обновляем метку при возвращении в приложение (из фона / другой вкладки)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) touchSession();
-  });
-
-  // Обновляем метку каждые 30 минут, пока приложение открыто
-  setInterval(() => {
-    if (document.visibilityState === 'visible') touchSession();
-  }, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) touchSession(); });
+  setInterval(() => { if (document.visibilityState === 'visible') touchSession(); }, 30 * 60 * 1000);
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -479,6 +272,7 @@
   let unsubscribeReminders = null, unsubscribeTasks = null, unsubscribeChats = null;
   let chatUnsubscribe = null, currentChatId = null, currentPartnerId = null;
   let lastDate = null;
+  let unreadCount = 0;
 
   const sidebar = document.getElementById('sidebar');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -554,17 +348,11 @@
   function showScreen(s) { Object.values(screens).forEach(x => x.classList.remove('active')); s.classList.add('active'); }
   function phoneToEmail(phone) { return phone.replace(/\s+/g, '') + '@slip.app'; }
 
-  // ОБРАБОТЧИК АВТОРИЗАЦИИ – с проверкой истечения сессии
+  // ========== АВТОРИЗАЦИЯ ==========
   auth.onAuthStateChanged(async (user) => {
-    // Если сессия истекла — принудительно выходим
     if (user && sessionExpired) {
       sessionExpired = false;
-      console.log('Принудительный выход: сессия истекла');
-      try {
-        await auth.signOut();
-      } catch (err) {
-        console.error('Ошибка signOut:', err);
-      }
+      try { await auth.signOut(); } catch (err) { console.error(err); }
       alert('Сессия истекла (прошло более 7 дней). Пожалуйста, войдите заново.');
       return;
     }
@@ -586,9 +374,27 @@
         showScreen(screens.main);
         activateTab('interesting');
       }
+
+      // Привязка устройства к user ID в OneSignal
+      window.currentUser = currentUser;
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          await OneSignal.login(user.uid);
+          console.log('OneSignal.login для', user.uid);
+        } catch (err) {
+          console.warn('OneSignal.login ошибка:', err);
+        }
+      });
     } else {
       firebaseUser = null; currentUser = null;
+      window.currentUser = null;
       showScreen(screens.login);
+
+      // Отвязка устройства от пользователя в OneSignal
+      OneSignalDeferred.push(async function(OneSignal) {
+        try { await OneSignal.logout(); } catch (err) { console.warn(err); }
+      });
     }
   });
 
@@ -629,7 +435,6 @@
     if (!phone || !pwd) return alert('Заполните все поля');
     try {
       await auth.signInWithEmailAndPassword(phoneToEmail(phone), pwd);
-      // При успешном входе обновляем метку активности
       touchSession();
     } catch (e) { alert('Ошибка входа: ' + e.message); }
   });
@@ -642,9 +447,7 @@
     if (pwd.length < 6) return alert('Пароль минимум 6 символов');
 
     const existing = await db.collection('users').where('phone', '==', phone).get();
-    if (!existing.empty) {
-      return alert('Пользователь с таким номером телефона уже зарегистрирован.');
-    }
+    if (!existing.empty) return alert('Пользователь с таким номером телефона уже зарегистрирован.');
 
     try {
       const cred = await auth.createUserWithEmailAndPassword(phoneToEmail(phone), pwd);
@@ -913,9 +716,7 @@
     });
 
     const addBtn = document.getElementById('addChatBtn');
-    if (addBtn) {
-      addBtn.addEventListener('click', () => openNewChatModal());
-    }
+    if (addBtn) addBtn.addEventListener('click', () => openNewChatModal());
 
     const listEl = $('#chatsList');
     unsubscribeChats = db.collection('chats')
@@ -944,7 +745,6 @@
           const timeDisplay = formatChatTime(lastMsgTime);
           const lastMsgSender = c.lastMessage?.sender;
           const lastMsgStatus = c.lastMessage?.status;
-
           const lastSeen = otherUser.lastSeen ? otherUser.lastSeen.toDate() : null;
           const online = isUserOnline(lastSeen);
 
@@ -1007,9 +807,7 @@
     if (knownUserIds.size > 0) {
       const usersSnap = await db.collection('users').get();
       usersSnap.forEach(doc => {
-        if (knownUserIds.has(doc.id)) {
-          knownUsers.push({ id: doc.id, ...doc.data() });
-        }
+        if (knownUserIds.has(doc.id)) knownUsers.push({ id: doc.id, ...doc.data() });
       });
     }
 
@@ -1160,11 +958,8 @@
       const now = new Date();
       const diffHours = (now - lastSeen) / (1000 * 60 * 60);
       const timeStr = lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      if (diffHours < 24) {
-        statusEl.textContent = `был(а) в сети в ${timeStr}`;
-      } else {
-        statusEl.textContent = `был(а) в сети ${lastSeen.toLocaleDateString()} в ${timeStr}`;
-      }
+      if (diffHours < 24) statusEl.textContent = `был(а) в сети в ${timeStr}`;
+      else statusEl.textContent = `был(а) в сети ${lastSeen.toLocaleDateString()} в ${timeStr}`;
     } else {
       statusEl.textContent = 'давно не заходил(а)';
     }
@@ -1257,15 +1052,6 @@
     return date.toLocaleDateString();
   }
 
-  function showMessageNotification(msg) {
-    if (Notification.permission === 'granted') {
-      new Notification(msg.senderName || 'Новое сообщение', {
-        body: msg.text || '📎 Медиа',
-        icon: 'icon.png'
-      });
-    }
-  }
-
   function listenMessages(chatId) {
     const container = document.getElementById('messagesContainer');
     if (!container) return;
@@ -1289,9 +1075,6 @@
               appendMessage(msg, container, false);
               container.scrollTop = container.scrollHeight;
               if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
-                showMessageNotification(msg);
-              }
-              if (msg.sender !== currentUser.id && (document.hidden || currentChatId !== chatId)) {
                 unreadCount++;
                 updateUnreadBadge();
               }
@@ -1301,7 +1084,6 @@
       });
   }
 
-  let unreadCount = 0;
   const unreadBadge = document.getElementById('unreadBadge');
   function updateUnreadBadge() {
     if (!unreadBadge) return;
@@ -1314,9 +1096,7 @@
   }
   async function initialUnreadCount() {
     if (!currentUser) return;
-    const chatsSnap = await db.collection('chats')
-      .where('participants', 'array-contains', currentUser.id)
-      .get();
+    const chatsSnap = await db.collection('chats').where('participants', 'array-contains', currentUser.id).get();
     let count = 0;
     for (const doc of chatsSnap.docs) {
       const msgsSnap = await doc.ref.collection('messages')
@@ -1331,11 +1111,8 @@
 
   function appendMessage(msg, container, isInitial) {
     let msgDate;
-    if (msg.time && msg.time.toDate) {
-      msgDate = new Date(msg.time.toDate());
-    } else {
-      msgDate = new Date();
-    }
+    if (msg.time && msg.time.toDate) msgDate = new Date(msg.time.toDate());
+    else msgDate = new Date();
     const dateStr = msgDate.toLocaleDateString();
     if (isInitial) {
       if (dateStr !== lastDate) {
@@ -1498,6 +1275,41 @@
     };
   }
 
+  // ============================================================
+  // Отправка push-уведомления получателю через OneSignal REST API
+  // ⚠️ Временное решение: ключ находится в клиенте и небезопасен!
+  // После теста перенесите эту логику в Firebase Cloud Function.
+  // ============================================================
+  async function sendPushToUser(recipientUserId, title, body, chatId) {
+    if (!recipientUserId) return;
+    if (!ONESIGNAL_REST_API_KEY || ONESIGNAL_REST_API_KEY.startsWith('ВСТАВЬТЕ')) {
+      console.warn('ONESIGNAL_REST_API_KEY не задан — push не отправлен');
+      return;
+    }
+    try {
+      const response = await fetch('https://api.onesignal.com/notifications?c=push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': `Key ${ONESIGNAL_REST_API_KEY}`
+        },
+        body: JSON.stringify({
+          app_id: ONESIGNAL_APP_ID,
+          include_aliases: { external_id: [recipientUserId] },
+          target_channel: 'push',
+          headings: { en: title, ru: title },
+          contents: { en: body, ru: body },
+          data: { chatId: chatId },
+          url: window.location.origin + '/'
+        })
+      });
+      const result = await response.json();
+      console.log('Push response:', result);
+    } catch (err) {
+      console.warn('Push send error:', err);
+    }
+  }
+
   async function sendMessage(type, mediaUrl = null) {
     const textarea = document.getElementById('messageInput');
     if (!textarea) return;
@@ -1505,7 +1317,12 @@
     const replyTo = textarea.dataset.replyTo || null;
     if (type === 'text' && !text) return;
 
-    await db.collection('chats').doc(currentChatId).update({
+    const chatDocRef = db.collection('chats').doc(currentChatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+    const recipientId = chatData.participants.find(id => id !== currentUser.id);
+
+    await chatDocRef.update({
       lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'pending' }
     });
 
@@ -1517,13 +1334,19 @@
       status: 'sent', replyTo: replyTo || null, reactions: []
     };
     if (replyTo) {
-      const snap = await db.collection('chats').doc(currentChatId).collection('messages').doc(replyTo).get();
+      const snap = await chatDocRef.collection('messages').doc(replyTo).get();
       if (snap.exists) msgData.replyToText = snap.data().text?.substring(0, 50);
     }
-    await db.collection('chats').doc(currentChatId).collection('messages').add(msgData);
-    await db.collection('chats').doc(currentChatId).update({
+    await chatDocRef.collection('messages').add(msgData);
+    await chatDocRef.update({
       lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'sent' }
     });
+
+    // Отправка push получателю
+    const pushTitle = currentUser.name || 'Новое сообщение';
+    const pushBody = type === 'text' ? text.substring(0, 120) : '📎 Медиа';
+    sendPushToUser(recipientId, pushTitle, pushBody, currentChatId);
+
     textarea.value = '';
     textarea.style.height = 'auto';
     textarea.focus();
@@ -1531,9 +1354,7 @@
     textarea.placeholder = 'Сообщение...';
 
     const container = document.getElementById('messagesContainer');
-    if (container) {
-      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
-    }
+    if (container) setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
   }
 
   async function markMessagesAsRead(chatId) {
@@ -1548,9 +1369,7 @@
     const chatDoc = await db.collection('chats').doc(chatId).get();
     const chatData = chatDoc.data();
     if (chatData.lastMessage && chatData.lastMessage.sender !== currentUser.id) {
-      await db.collection('chats').doc(chatId).update({
-        'lastMessage.status': 'read'
-      });
+      await db.collection('chats').doc(chatId).update({ 'lastMessage.status': 'read' });
     }
 
     unreadCount -= msgs.size;
@@ -1590,7 +1409,6 @@
         <p><strong>Никнейм:</strong> ${u.nick || 'не указан'}</p>
       </div>
 
-      <!-- Переключатель уведомлений -->
       <div class="card" style="display:flex; align-items:center; justify-content:space-between;">
         <div>
           <div style="font-size:17px;">🔔 Уведомления</div>
@@ -1607,95 +1425,59 @@
       <button class="ios-btn secondary" id="logoutBtn" style="margin-top:8px;">Выйти</button>
     `;
 
-    // === ЛОГИКА ПОЛЗУНКА УВЕДОМЛЕНИЙ ===
     const toggle = document.getElementById('notificationsToggle');
     const statusText = document.getElementById('notifStatusText');
 
-    (async () => {
-      let isSubscribed = false;
+    // Проверка текущего статуса подписки в OneSignal
+    OneSignalDeferred.push(async function(OneSignal) {
       try {
-        if ('serviceWorker' in navigator) {
-          const reg = await navigator.serviceWorker.getRegistration();
-          if (reg) {
-            const sub = await reg.pushManager.getSubscription();
-            isSubscribed = !!sub;
-          }
-        }
+        const optedIn = OneSignal.User.PushSubscription.optedIn;
+        const permission = OneSignal.Notifications.permission;
+        toggle.checked = !!(optedIn && permission);
+        statusText.textContent = toggle.checked ? 'Уведомления включены' : 'Уведомления выключены';
       } catch (err) {
-        console.warn('Не удалось проверить подписку:', err);
+        statusText.textContent = 'Не удалось получить статус';
       }
-      toggle.checked = isSubscribed;
-      if (statusText) {
-        statusText.textContent = isSubscribed ? 'Уведомления включены' : 'Уведомления выключены';
-      }
-    })();
+    });
 
     if (toggle) {
       toggle.addEventListener('change', async (e) => {
         toggle.disabled = true;
-        if (statusText) statusText.textContent = 'Обработка...';
+        statusText.textContent = 'Обработка...';
 
         if (e.target.checked) {
           let permission = Notification.permission;
-          if (permission === 'default') {
-            permission = await Notification.requestPermission();
-          }
+          if (permission === 'default') permission = await Notification.requestPermission();
           if (permission !== 'granted') {
             alert('Необходимо разрешить уведомления в настройках браузера.');
             e.target.checked = false;
-            if (statusText) statusText.textContent = 'Уведомления выключены';
+            statusText.textContent = 'Уведомления выключены';
             toggle.disabled = false;
             return;
           }
-
-          try {
-            if (window.OneSignal) {
+          OneSignalDeferred.push(async function(OneSignal) {
+            try {
               await OneSignal.Notifications.requestPermission();
               await OneSignal.User.PushSubscription.optIn();
-              console.log('OneSignal: подписка активирована');
+              if (currentUser) await OneSignal.login(currentUser.id);
+              statusText.textContent = 'Уведомления включены';
+            } catch (err) {
+              console.warn('OneSignal optIn ошибка:', err);
+              statusText.textContent = 'Ошибка включения';
             }
-          } catch (err) {
-            console.warn('OneSignal ошибка подписки:', err);
-          }
-
-          let hwid = null;
-          if (typeof registerPushwoosh === 'function') {
-            hwid = await registerPushwoosh();
-          }
-          if (hwid) {
-            await db.collection('users').doc(currentUser.id).update({ pushwooshHwid: hwid });
-            currentUser.pushwooshHwid = hwid;
-            if (statusText) statusText.textContent = 'Уведомления включены';
-          } else {
-            if (window.OneSignal && OneSignal.User.PushSubscription.optedIn) {
-              if (statusText) statusText.textContent = 'Уведомления включены (OneSignal)';
-            } else {
-              alert('Не удалось зарегистрировать устройство для уведомлений.');
-              e.target.checked = false;
-              if (statusText) statusText.textContent = 'Уведомления выключены';
-            }
-          }
-          toggle.disabled = false;
-        } else {
-          try {
-            if (window.OneSignal) {
-              await OneSignal.User.PushSubscription.optOut();
-              console.log('OneSignal: подписка отключена');
-            }
-          } catch (err) {
-            console.warn('OneSignal ошибка отписки:', err);
-          }
-
-          if (typeof unregisterPushwoosh === 'function') {
-            await unregisterPushwoosh();
-          }
-          await db.collection('users').doc(currentUser.id).update({
-            pushwooshHwid: firebase.firestore.FieldValue.delete()
+            toggle.disabled = false;
           });
-          delete currentUser.pushwooshHwid;
-
-          if (statusText) statusText.textContent = 'Уведомления выключены';
-          toggle.disabled = false;
+        } else {
+          OneSignalDeferred.push(async function(OneSignal) {
+            try {
+              await OneSignal.User.PushSubscription.optOut();
+              statusText.textContent = 'Уведомления выключены';
+            } catch (err) {
+              console.warn('OneSignal optOut ошибка:', err);
+              statusText.textContent = 'Ошибка отключения';
+            }
+            toggle.disabled = false;
+          });
         }
       });
     }
@@ -1735,8 +1517,11 @@
   }
 
   function openEditProfile() {
-    // ... остальной код без изменений
+    // Реализуйте по мере необходимости
   }
+
+  // Экспорт функции открытия чата — нужен для обработки клика по push
+  window.openChatScreen = openChatScreen;
 </script>
 </body>
 </html>
