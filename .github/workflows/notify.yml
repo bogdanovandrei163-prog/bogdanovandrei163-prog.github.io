@@ -1,1 +1,28 @@
+name: Send Push Notification on Push
 
+on:
+  push:
+    branches: [ main ] # Если у вас master — замените
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send notification to OneSignal
+        run: |
+          curl -X POST "https://api.onesignal.com/notifications?c=push" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Key ${{ secrets.ONESIGNAL_REST_API_KEY }}" \
+            -d '{
+              "app_id": "${{ secrets.ONESIGNAL_APP_ID }}",
+              "included_segments": ["All Users"],
+              "contents": {
+                "en": "${{ github.actor }} pushed to ${{ github.ref_name }}: ${{ github.event.head_commit.message }}",
+                "ru": "${{ github.actor }} запушил в ${{ github.ref_name }}: ${{ github.event.head_commit.message }}"
+              },
+              "headings": {
+                "en": "🚀 Update in ${{ github.event.repository.name }}",
+                "ru": "🚀 Обновление в ${{ github.event.repository.name }}"
+              },
+              "url": "https://github.com/${{ github.repository }}"
+            }'
