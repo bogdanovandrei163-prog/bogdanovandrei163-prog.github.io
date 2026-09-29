@@ -4,39 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Slip</title>
+
+  <!-- PWA -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Slip">
-  <link rel="apple-touch-icon" href="icon.png">
+  <meta name="theme-color" content="#007aff">
+
   <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
 
-  <!-- OneSignal Web SDK v16 -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "096117d5-73c4-4a75-84ac-abf9318b1842",
-        allowLocalhostAsSecureOrigin: true,
-      });
-
-      // Обработка клика по push-уведомлению
-      OneSignal.Notifications.addEventListener('click', (event) => {
-        const data = event.notification.additionalData;
-        if (data && data.chatId) {
-          if (typeof window.openChatScreen === 'function' && window.currentUser) {
-            window.openChatScreen(data.chatId);
-          } else {
-            window.location.href = '/';
-          }
-        }
-      });
-    });
-  </script>
-
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <!-- PushEngage SDK -->
+  <script>
+    (function(w, d) {
+      w.PushEngage = w.PushEngage || [];
+      w._peq = w._peq || [];
+      PushEngage.push(['init', {
+        appId: 'fc8cd838-60e7-4352-a5a8-ca4067577b25'
+      }]);
+      var e = d.createElement('script');
+      e.src = 'https://clientcdn.pushengage.com/sdks/pushengage-web-sdk.js';
+      e.async = true;
+      e.type = 'text/javascript';
+      d.head.appendChild(e);
+    })(window, document);
+  </script>
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     body { background: #000; min-height: 100dvh; display: flex; justify-content: center; align-items: center; }
@@ -220,14 +221,7 @@
 </div>
 
 <script>
-  // ============================================================
-  // ⚠️ ВНИМАНИЕ: этот ключ в клиенте — только для теста!
-  // После проверки перенесите отправку push в Firebase Cloud Function
-  // и удалите ключ из этого файла.
-  // ============================================================
-  const ONESIGNAL_APP_ID = '096117d5-73c4-4a75-84ac-abf9318b1842';
-  const ONESIGNAL_REST_API_KEY = 'ВСТАВЬТЕ_СЮДА_ВАШ_REST_API_KEY';
-
+  // ========== FIREBASE ==========
   const firebaseConfig = {
     apiKey: "AIzaSyBRR33qbJhlWVjSykp2YLrk1dz8EWXiyI8",
     authDomain: "slip-54122.firebaseapp.com",
@@ -240,6 +234,21 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
+
+  // ========== PUSHENGAGE: настройка кастомного идентификатора ==========
+  // После логина привязываем подписчика к Firebase UID,
+  // чтобы сервер мог отправить push конкретному пользователю.
+  function setPushEngageIdentifier(userId) {
+    if (!userId) return;
+    PushEngage.push(['setCustomIdentifier', userId]);
+    console.log('PushEngage: custom identifier =', userId);
+  }
+
+  // Обработка клика по push-уведомлению (PushEngage кладёт data в URL,
+  // поэтому в URL уведомления мы передадим ?chatId=xxx)
+  function handlePushEngageClick() {
+    // Обрабатывается через URL-параметр при загрузке страницы (см. ниже).
+  }
 
   // ========== УПРАВЛЕНИЕ СЕССИЕЙ ==========
   const SESSION_KEY = 'slip_last_active';
@@ -375,26 +384,24 @@
         activateTab('interesting');
       }
 
-      // Привязка устройства к user ID в OneSignal
+      // Привязка пользователя к PushEngage
       window.currentUser = currentUser;
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        try {
-          await OneSignal.login(user.uid);
-          console.log('OneSignal.login для', user.uid);
-        } catch (err) {
-          console.warn('OneSignal.login ошибка:', err);
-        }
-      });
+      setPushEngageIdentifier(user.uid);
+
+      // Обработка перехода по push: если в URL есть ?chatId=xxx
+      const params = new URLSearchParams(window.location.search);
+      const chatIdFromUrl = params.get('chatId');
+      if (chatIdFromUrl) {
+        setTimeout(() => {
+          if (typeof openChatScreen === 'function') openChatScreen(chatIdFromUrl);
+          // Убираем chatId из URL
+          window.history.replaceState({}, '', window.location.pathname);
+        }, 800);
+      }
     } else {
       firebaseUser = null; currentUser = null;
       window.currentUser = null;
       showScreen(screens.login);
-
-      // Отвязка устройства от пользователя в OneSignal
-      OneSignalDeferred.push(async function(OneSignal) {
-        try { await OneSignal.logout(); } catch (err) { console.warn(err); }
-      });
     }
   });
 
@@ -1275,41 +1282,10 @@
     };
   }
 
-  // ============================================================
-  // Отправка push-уведомления получателю через OneSignal REST API
-  // ⚠️ Временное решение: ключ находится в клиенте и небезопасен!
-  // После теста перенесите эту логику в Firebase Cloud Function.
-  // ============================================================
-  async function sendPushToUser(recipientUserId, title, body, chatId) {
-    if (!recipientUserId) return;
-    if (!ONESIGNAL_REST_API_KEY || ONESIGNAL_REST_API_KEY.startsWith('ВСТАВЬТЕ')) {
-      console.warn('ONESIGNAL_REST_API_KEY не задан — push не отправлен');
-      return;
-    }
-    try {
-      const response = await fetch('https://api.onesignal.com/notifications?c=push', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': `Key ${ONESIGNAL_REST_API_KEY}`
-        },
-        body: JSON.stringify({
-          app_id: ONESIGNAL_APP_ID,
-          include_aliases: { external_id: [recipientUserId] },
-          target_channel: 'push',
-          headings: { en: title, ru: title },
-          contents: { en: body, ru: body },
-          data: { chatId: chatId },
-          url: window.location.origin + '/'
-        })
-      });
-      const result = await response.json();
-      console.log('Push response:', result);
-    } catch (err) {
-      console.warn('Push send error:', err);
-    }
-  }
-
+  // ========== ОТПРАВКА СООБЩЕНИЯ ==========
+  // Push теперь уходит НЕ из клиента, а из Firebase Cloud Function
+  // (см. functions/index.js), которая срабатывает на добавление документа
+  // в chats/{chatId}/messages.
   async function sendMessage(type, mediaUrl = null) {
     const textarea = document.getElementById('messageInput');
     if (!textarea) return;
@@ -1320,7 +1296,6 @@
     const chatDocRef = db.collection('chats').doc(currentChatId);
     const chatDoc = await chatDocRef.get();
     const chatData = chatDoc.data();
-    const recipientId = chatData.participants.find(id => id !== currentUser.id);
 
     await chatDocRef.update({
       lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'pending' }
@@ -1341,11 +1316,6 @@
     await chatDocRef.update({
       lastMessage: { text: type === 'text' ? text : '📎 Медиа', sender: currentUser.id, time: new Date(), status: 'sent' }
     });
-
-    // Отправка push получателю
-    const pushTitle = currentUser.name || 'Новое сообщение';
-    const pushBody = type === 'text' ? text.substring(0, 120) : '📎 Медиа';
-    sendPushToUser(recipientId, pushTitle, pushBody, currentChatId);
 
     textarea.value = '';
     textarea.style.height = 'auto';
@@ -1428,57 +1398,49 @@
     const toggle = document.getElementById('notificationsToggle');
     const statusText = document.getElementById('notifStatusText');
 
-    // Проверка текущего статуса подписки в OneSignal
-    OneSignalDeferred.push(async function(OneSignal) {
-      try {
-        const optedIn = OneSignal.User.PushSubscription.optedIn;
-        const permission = OneSignal.Notifications.permission;
-        toggle.checked = !!(optedIn && permission);
-        statusText.textContent = toggle.checked ? 'Уведомления включены' : 'Уведомления выключены';
-      } catch (err) {
-        statusText.textContent = 'Не удалось получить статус';
-      }
-    });
+    // Проверка текущего статуса подписки в PushEngage
+    PushEngage.push(['isSubscribed', function(isSubscribed) {
+      toggle.checked = !!isSubscribed;
+      statusText.textContent = isSubscribed ? 'Уведомления включены' : 'Уведомления выключены';
+    }]);
 
     if (toggle) {
       toggle.addEventListener('change', async (e) => {
         toggle.disabled = true;
         statusText.textContent = 'Обработка...';
 
+        // Проверяем: iOS и не установлено как PWA?
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isStandalone = window.navigator.standalone === true;
+        if (isIOS && !isStandalone) {
+          alert('На iPhone уведомления работают только после добавления сайта на экран «Домой». Нажмите «Поделиться» → «На экран “Домой”» и откройте Slip оттуда.');
+          e.target.checked = false;
+          statusText.textContent = 'Уведомления выключены';
+          toggle.disabled = false;
+          return;
+        }
+
         if (e.target.checked) {
-          let permission = Notification.permission;
-          if (permission === 'default') permission = await Notification.requestPermission();
-          if (permission !== 'granted') {
+          // Разрешение должно запрашиваться по клику пользователя
+          if (Notification.permission === 'default') {
+            await Notification.requestPermission();
+          }
+          if (Notification.permission !== 'granted') {
             alert('Необходимо разрешить уведомления в настройках браузера.');
             e.target.checked = false;
             statusText.textContent = 'Уведомления выключены';
             toggle.disabled = false;
             return;
           }
-          OneSignalDeferred.push(async function(OneSignal) {
-            try {
-              await OneSignal.Notifications.requestPermission();
-              await OneSignal.User.PushSubscription.optIn();
-              if (currentUser) await OneSignal.login(currentUser.id);
-              statusText.textContent = 'Уведомления включены';
-            } catch (err) {
-              console.warn('OneSignal optIn ошибка:', err);
-              statusText.textContent = 'Ошибка включения';
-            }
-            toggle.disabled = false;
-          });
+          PushEngage.push(['subscribe']);
+          // После подписки ещё раз привязываем custom identifier на случай, если он был утерян
+          if (currentUser) setPushEngageIdentifier(currentUser.id);
+          statusText.textContent = 'Уведомления включены';
         } else {
-          OneSignalDeferred.push(async function(OneSignal) {
-            try {
-              await OneSignal.User.PushSubscription.optOut();
-              statusText.textContent = 'Уведомления выключены';
-            } catch (err) {
-              console.warn('OneSignal optOut ошибка:', err);
-              statusText.textContent = 'Ошибка отключения';
-            }
-            toggle.disabled = false;
-          });
+          PushEngage.push(['unsubscribe']);
+          statusText.textContent = 'Уведомления выключены';
         }
+        toggle.disabled = false;
       });
     }
 
@@ -1520,7 +1482,6 @@
     // Реализуйте по мере необходимости
   }
 
-  // Экспорт функции открытия чата — нужен для обработки клика по push
   window.openChatScreen = openChatScreen;
 </script>
 </body>
